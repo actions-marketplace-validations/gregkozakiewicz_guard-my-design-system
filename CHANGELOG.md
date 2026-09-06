@@ -4,6 +4,13 @@ The promise behind every number: a patch release never changes what gets
 flagged. If a version flags something new, it is a minor or major bump and
 this file says what, in one plain line.
 
+## 1.3.4 — 6 Sep 2026
+
+Docs only: the README rewritten to the GOV.UK plain-language standard — short
+sentences, active voice, everyday words. The slogan, the sample findings and
+the promises all stay; the metaphors go. The command table also gains the
+`--version` row it was missing. Nothing about behaviour changes.
+
 ## 1.3.3 — 2 Sep 2026
 
 Docs only: the README and landing page catch up with 1.3.2 — the guard now
