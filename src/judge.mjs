@@ -90,7 +90,10 @@ export function judge(added, system) {
   // "use var(--blue-500)", not "go hunt this hex": name a value when the
   // system defines it as a custom property.
   const named = (value) => {
-    const n = system.tokenNames?.[value];
+    // shadcn-style tokens are defined as bare triplets (--primary: 222.2 47.4%
+    // 11.2%) but normalised to hsl(...); try the unwrapped form too.
+    const n = system.tokenNames?.[value]
+      ?? system.tokenNames?.[value.replace(/^hsla?\((.*)\)$/i, '$1')];
     return n ? `var(${n}), ${value}` : value;
   };
   const faceCounts = new Map();

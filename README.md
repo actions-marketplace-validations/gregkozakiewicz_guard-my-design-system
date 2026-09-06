@@ -36,7 +36,9 @@ it updates that same comment. It never adds more comments:
 ## What it catches
 
 - **A hard-coded colour where a token exists.** The finding names the token:
-  `var(--blue-500)`, not just a hex code.
+  `var(--blue-500)`, not just a hex code. This works across colour notations:
+  a hex stray is matched to an hsl or oklch token, including shadcn's
+  bare-triplet variables.
 - **A spacing value your codebase has never used**, with the nearest existing
   step named.
 - **A border radius, font size or shadow your system does not declare**, with

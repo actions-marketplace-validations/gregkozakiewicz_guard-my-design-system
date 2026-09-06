@@ -4,6 +4,22 @@ The promise behind every number: a patch release never changes what gets
 flagged. If a version flags something new, it is a minor or major bump and
 this file says what, in one plain line.
 
+## 1.3.5 — 7 Sep 2026
+
+The engine moves to roast 5.10.2 and shadcn repos become legible. Nothing new
+is flagged; the advice gets much truer.
+
+- **shadcn palettes are read for real.** Tailwind v3 shadcn stores tokens as
+  bare HSL triplets; the old engine saw almost none of them, so the guard's
+  colour advice on the most common React stack ran on an empty map. Now a hex
+  stray is matched to the actual palette, across colour notations, and named:
+  "nearest token: `var(--foreground)`, hsl(222.2 47.4% 11.2%)". Verified on
+  shadcn-ui/taxonomy.
+- **The "it belongs in …" advice names the right file** — the token file is
+  now chosen by where the palette lives, not where the most `--var`s sit.
+- Artwork and OG-image routes stop contributing junk values to the learned
+  system, inherited from the engine.
+
 ## 1.3.4 — 6 Sep 2026
 
 Docs only: the README rewritten to the GOV.UK plain-language standard — short
