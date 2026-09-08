@@ -54,8 +54,8 @@ console.log('sinful change:');
 
   const r = run(dir);
   const kinds = r.findings.map((f) => f.kind).sort().join(',');
-  ok(r.findings.length === 6, `finds 6 issues (got ${r.findings.length})`);
-  ok(kinds === 'arbitrary,color,color,font,important,spacing', `kinds are right (${kinds})`);
+  ok(r.findings.length === 7, `finds 7 issues (got ${r.findings.length})`);
+  ok(kinds === 'arbitrary,color,color,font,important,inline,spacing', `kinds are right (${kinds})`);
   const stray = r.findings.find((f) => f.kind === 'color' && f.value === '#3564cc');
   ok(stray?.advice.includes('#3b6fe0'), 'stray colour names its nearest token');
   const spacing = r.findings.find((f) => f.kind === 'spacing');
@@ -156,6 +156,35 @@ console.log('new kinds:');
   ok(kinds === 'fontsize,radius,shadow', `all three kinds flagged (${kinds})`);
   const radius = r.findings.find((f) => f.kind === 'radius');
   ok(radius?.advice.includes('6px'), 'radius names the nearest existing value');
+  rmSync(dir, { recursive: true, force: true });
+}
+
+// ---- inline style blocks ----
+// The gap that let a whole class of change through (2026-09-08): a PR adding
+// style={{ display: 'flex' }} carries no colour and no length, so nothing
+// tripped. The engine had flagged inline blocks since 5.0; the guard had not.
+console.log('inline styles:');
+{
+  const dir = makeRepo();
+  writeFileSync(join(dir, 'components/Panel.tsx'),
+    'export const Panel = () => <div style={{ display: "flex", gap: "12px" }}>x</div>;\n');
+  const r = run(dir);
+  const inline = r.findings.filter((f) => f.kind === 'inline');
+  ok(inline.length === 1, `a colourless inline block is still caught (got ${inline.length})`);
+  ok(inline[0]?.advice.includes('invisible'), 'advice says why it cannot be seen');
+
+  // a block whose values come from variables is decided elsewhere; the guard
+  // cannot know whether it is on-system, so it says nothing
+  writeFileSync(join(dir, 'components/Panel.tsx'),
+    'export const Panel = ({ w }) => <div style={{ width: w, color: theme.fg }}>x</div>;\n');
+  const dyn = run(dir);
+  ok(dyn.findings.filter((f) => f.kind === 'inline').length === 0,
+    'a block built from variables is not judged');
+
+  // and the label carries no redundant value
+  const text = execFileSync('node', [CLI, dir, '--base', 'HEAD'], { encoding: 'utf8' });
+  ok(!text.includes('style={{ }} .'), 'the report does not repeat the value after the label');
+
   rmSync(dir, { recursive: true, force: true });
 }
 

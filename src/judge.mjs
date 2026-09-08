@@ -50,7 +50,8 @@ const extraValue = (re, text) => {
 /**
  * Judge added lines against the learned system.
  * Returns [{ file, line, kind, value, advice }] sorted by file then line.
- * kinds: color | spacing | arbitrary | important | font
+ * kinds: color | spacing | radius | fontsize | shadow | arbitrary |
+ *        important | font | inline
  */
 export function judge(added, system) {
   const tokenSet = new Set(system.tokens);
@@ -149,6 +150,17 @@ export function judge(added, system) {
               : 'first of its kind in this codebase',
         });
       }
+    }
+
+    // Styling inside style={{ }} is invisible to the system and to every
+    // agent that reads the file, so it can never be on-system by definition.
+    // Only static blocks count; extractStyling already ignores the ones built
+    // from variables, where the values are decided elsewhere.
+    for (const _ of seen.inlineBlocks) {
+      findings.push({
+        file, line, kind: 'inline', value: 'style={{ }}',
+        advice: 'the values are invisible to the system and to every agent that reads the file; move them to classes or tokens',
+      });
     }
 
     for (const a of seen.arbitrary) {
