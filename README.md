@@ -8,15 +8,19 @@ The guard checks pull requests for design-system drift. It looks only at the
 lines a change adds. It never judges the code that was already there. For each
 problem it finds, it names the closest value your system already has:
 
-> `Card.tsx:24` — new colour `#4a7be8`. Nearest token: `var(--blue-500)`, `#3b6fe0`.
+> `Card.tsx:24` · new colour `#4a7be8`. Nearest token: `var(--blue-500)`, `#3b6fe0`.
 >
-> `site.css:31` — new spacing value `13px`. Nearest existing value: `12px`.
+> `site.css:31` · new spacing value `13px`. Nearest existing value: `12px`.
 >
-> `site.css:32` — new border radius `5px`. Nearest existing value: `6px`.
+> `site.css:32` · new border radius `5px`. Nearest existing value: `6px`.
 >
-> `site.css:33` — new typeface `Comic Sans MS`. First typeface declared in this codebase.
+> `site.css:33` · new typeface `Comic Sans MS`. First typeface declared in this codebase.
 >
-> `site.css:35` — `!important`. The cascade admitting defeat; raise specificity or fix the source order.
+> `site.css:35` · `!important`. The cascade admitting defeat; raise specificity or fix the source order.
+>
+> `Panel.tsx:12` · inline style block. The values are invisible to the system and to every agent that reads the file; move them to classes or tokens.
+>
+> `ButtonV2.tsx:1` · second definition of `Button`. Import components/Button.tsx rather than starting a second one.
 
 It learns your design system by scanning your repository with the
 [roast-my-design-system](https://github.com/gregkozakiewicz/roast-my-design-system)
@@ -46,6 +50,11 @@ it updates that same comment. It never adds more comments:
 - **A typeface your system does not declare.**
 - **`!important`.**
 - **Arbitrary Tailwind values** such as `w-[137px]` and `mt-[37px]`.
+- **An inline `style={{ }}` block.** Styling written there is invisible to the
+  system and to every agent that reads the file. Blocks built from variables
+  are decided elsewhere, so they are left alone.
+- **A second definition of a component you already have.** The finding names
+  the file that already defines it, and how many places use that one.
 
 It ignores everything that was already in the codebase. It asks one question
 of a change: does it make things worse?
@@ -174,10 +183,14 @@ updating PR comment works on GitHub only, for now.
   time. No AI model is involved.
 - **Read-only. No network. No telemetry.** Everything runs on your machine or
   your CI runner. Nothing about your code leaves it.
-- **Fair exemptions, inherited from roast.** Email and print styling must be
-  inline, so the guard never flags it. Files that draw SVG artwork are not
-  judged on their colours. Defining a new token is extending the system, not
-  a problem.
+- **Fair exemptions, shared with roast.** Some files cannot be on-system, so
+  judging them would be crying wolf. Email and print styling has to be inline,
+  because there is no cascade to inherit. An OG card or a PDF invoice is a
+  picture drawn with code. A canvas renderer draws pixels. A file that draws
+  SVG is artwork, not interface. The guard reads that list from the roast
+  engine rather than keeping its own, so the two can never drift apart and
+  give you different answers about the same file. Defining a new token is
+  extending the system, not a problem.
 - **Every finding comes with a fix.** The guard names the on-system value the
   author probably meant, so most fixes take under a minute and no meeting.
 

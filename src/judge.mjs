@@ -10,12 +10,9 @@
 import {
   extractStyling, normalizeHex, nearestColor, nearestLength,
   isCodeFile, isStyleFile, typefaceOf, GENERIC_FONTS,
+  definedComponents, exemptReason,
+  EXTRA_KINDS, FONT_LINE_RE, extraValue,
 } from 'roast-my-design-system/engine';
-// The component ledger arrived in a later engine than the one this package may
-// be pinned to. Read through the namespace and feature-detect it, so an older
-// roast means one check fewer rather than a crash.
-import * as engine from 'roast-my-design-system/engine';
-const definedComponents = typeof engine.definedComponents === 'function' ? engine.definedComponents : null;
 
 // git prints diff paths from the repository root; the engine lists them from
 // the directory it scanned. When the guard runs in a subdirectory the two
@@ -23,33 +20,12 @@ const definedComponents = typeof engine.definedComponents === 'function' ? engin
 // towards calling them the same file, which errs towards silence.
 const samePath = (a, b) => a === b || a.endsWith(`/${b}`) || b.endsWith(`/${a}`);
 
-// The honesty exemptions: files that cannot be on-system by their nature, so
-// judging them is how a checker earns a reputation for crying wolf. Email and
-// print styling must be inline. An OG card or a PDF invoice is a picture drawn
-// with code. A renderer draws pixels. Artwork-named files are exempt only when
-// they actually draw SVG, so a Badge that is plain styled UI is guarded like
-// everything else.
-//
-// The engine owns the list now, which is what the comment here always claimed
-// and never was. The copy below is the fallback for an older pinned roast, and
-// is kept complete rather than partial: a false positive the guard could have
-// avoided is not worth waiting a release for. It goes when the pin moves.
-const EMAIL_PRINT_RE = /email|(^|[/.])print([/.]|$)/i;
-const ARTWORK_NAME_RE = /(^|\/)[\w.-]*(icon|logo|badge|illustration|shield|artwork|graphic|background)[\w.-]*\.(tsx|jsx)$/i;
-const SVG_MARKUP_RE = /<(svg|path|rect|circle|ellipse|polygon|defs|mask)\b/i;
-const RENDER_TO_IMAGE_RE = /ImageResponse|from ['"]satori['"]|from ['"]@react-pdf|next\/og/;
-const OG_ROUTE_RE = /(^|\/)api\/og\//;
-const RENDERER_PATH_RE = /(^|\/)(renderers?|scene|canvas)\/|renderElement|DebugCanvas/i;
-const svgHeavy = (text) => (text.match(/<(?:svg|path|rect|circle|ellipse|polygon|mask|defs)\b/g) ?? []).length >= 15;
-const localExemptReason = (file, text) => {
-  if (EMAIL_PRINT_RE.test(file)) return 'email or print';
-  if (RENDERER_PATH_RE.test(file)) return 'a pixel renderer';
-  if (OG_ROUTE_RE.test(file) || RENDER_TO_IMAGE_RE.test(text)) return 'a render-to-image surface';
-  if (svgHeavy(text)) return 'mostly drawing';
-  if (ARTWORK_NAME_RE.test(file) && SVG_MARKUP_RE.test(text)) return 'artwork';
-  return null;
-};
-const exemptReason = typeof engine.exemptReason === 'function' ? engine.exemptReason : localExemptReason;
+// The honesty exemptions come from the engine now: email and print styling
+// that must be inline, OG cards and PDF invoices, pixel renderers, and artwork
+// that actually draws. This file used to keep its own copy and claim in a
+// comment that the engine applied the same one. It did not, and that gap is
+// how roast --check came to raise findings on email templates. One list, read
+// from the doorway, so the claim is true by construction.
 
 /**
  * Which files to leave alone. The whole file decides, not the added lines: a
@@ -72,24 +48,8 @@ function exemptFiles(added, readFile) {
   };
 }
 
-const FONT_LINE_RE = /font-family\s*:\s*([^;{}]+)/i;
-
-// The other declarations the engine harvests and the guard judges in style
-// files. One regex per kind; the whole trimmed value is the unit of
-// comparison, exactly as the harvest counts it.
-const EXTRA_KINDS = [
-  { kind: 'radius', re: /border-radius\s*:\s*([^;{}]+)/i, learned: 'radii' },
-  { kind: 'fontsize', re: /(?:^|[^-\w])font-size\s*:\s*([^;{}]+)/i, learned: 'fontSizes' },
-  { kind: 'shadow', re: /box-shadow\s*:\s*([^;{}]+)/i, learned: 'shadows' },
-];
-// Disciplined values that are never sins: token use, resets, inheritance.
-const BENIGN_VALUE_RE = /^(var\(--[\w-]+\)|inherit|initial|unset|none|normal|0)$/i;
-const extraValue = (re, text) => {
-  const m = re.exec(text);
-  if (!m) return null;
-  const v = m[1].trim().replace(/\s+/g, ' ');
-  return BENIGN_VALUE_RE.test(v) ? null : v;
-};
+// Radius, font size and shadow, and what counts as a disciplined value, also
+// come from the engine, so the harvest and the guard measure the same thing.
 
 /**
  * Judge added lines against the learned system.

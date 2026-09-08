@@ -4,6 +4,38 @@ The promise behind every number: a patch release never changes what gets
 flagged. If a version flags something new, it is a minor or major bump and
 this file says what, in one plain line.
 
+## 1.4.0 — 8 Sep 2026
+
+Two new things get flagged, and a class of false positive goes away. The guard
+and `roast --check` were answering the same question differently in seven
+places; they now agree.
+
+- **Now flagged: an inline `style={{ }}` block.** A pull request adding
+  `style={{ display: 'flex' }}` carried no colour and no length, so nothing in
+  the judge tripped and it sailed through. Only static blocks count. A block
+  built from variables is decided somewhere else, and the guard cannot know
+  whether that somewhere is on-system, so it stays quiet.
+- **Now flagged: a second definition of a component you already have.** The
+  most expensive thing a pull request can add, and the one thing the guard
+  could not see. The finding names the file that already defines it and how
+  many places use that one. Pages are routes rather than reusable parts, so
+  two of a name there is not a second Button.
+- **No longer flagged: pictures drawn with code.** An OG card, a PDF invoice,
+  a canvas renderer and a file that is mostly SVG are all drawing rather than
+  interface. The roast report has skipped them since 5.10 and the guard did
+  not, so the same file came up clean in one place and full of strays in
+  another. The whole file decides now, not the added lines, because a satori
+  import sits at the top of a file a diff may never touch.
+- **The exemption list, the extra declaration kinds and the component ledger
+  all come from the engine.** The guard used to keep its own copies and a
+  comment claiming they matched the engine's. They did not, and that is how
+  the seven gaps opened. Forty lines of duplicated rules deleted; the claim is
+  now true by construction. Requires roast 5.11.0, which the pin moves to.
+- Em-dashes are gone from everything a person reads: the colour advice, both
+  report formats, the git error and the strict-mode line in the action. A test
+  fails if one comes back. Findings now read `Card.tsx:24 · new colour…`.
+- Suite grows to 43.
+
 ## 1.3.5 — 7 Sep 2026
 
 The engine moves to roast 5.10.2 and shadcn repos become legible. Nothing new
