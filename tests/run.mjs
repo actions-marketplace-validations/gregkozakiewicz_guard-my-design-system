@@ -258,6 +258,61 @@ console.log('artwork exemption earns itself:');
 }
 
 // ---- excluded folders are invisible to the judge too ----
+// ---- pictures drawn with code ----
+// The report skipped these from roast 5.10 and the guard did not, so an OG
+// card came up clean in one door and full of strays in the other (2026-09-08).
+// The satori import sits at the top of a file the diff never touches, which is
+// why the judge reads the whole file rather than the added lines.
+console.log('pictures, not interface:');
+{
+  const dir = makeRepo();
+  mkdirSync(join(dir, 'app/api/og'), { recursive: true });
+  mkdirSync(join(dir, 'src/renderers'), { recursive: true });
+  writeFileSync(join(dir, 'app/card.tsx'),
+    "import { ImageResponse } from 'next/og';\nexport function GET() { return new ImageResponse(<div />); }\n");
+  git(dir, 'add', '-A');
+  git(dir, 'commit', '-qm', 'og base');
+
+  const STRAY = 'export const X = () => <div style={{ background: "#c0ffee", padding: "27px" }} />;\n';
+  writeFileSync(join(dir, 'app/api/og/route.tsx'), STRAY);
+  writeFileSync(join(dir, 'src/renderers/Board.tsx'), STRAY);
+  writeFileSync(join(dir, 'components/Scene.tsx'),
+    `export const Scene = () => <svg style={{ fill: "#c0ffee" }}>${'<path d="M0 0" />'.repeat(15)}</svg>;\n`);
+  // the giveaway is in the committed part of the file, not in the added line
+  writeFileSync(join(dir, 'app/card.tsx'),
+    "import { ImageResponse } from 'next/og';\nexport function GET() { return new ImageResponse(<div style={{ background: '#c0ffee' }} />); }\n");
+
+  const r = run(dir, '--base', 'HEAD');
+  for (const [needle, label] of [
+    ['api/og', 'an OG route is left alone'],
+    ['renderers', 'a pixel renderer is left alone'],
+    ['Scene', 'a file that is mostly drawing is left alone'],
+    ['card.tsx', 'a next/og import above the diff still exempts the file'],
+  ]) {
+    ok(!r.findings.some((f) => f.file.includes(needle)), label);
+  }
+
+  // and an ordinary component in the same change is still judged
+  writeFileSync(join(dir, 'components/Panel.tsx'), STRAY);
+  const r2 = run(dir, '--base', 'HEAD');
+  ok(r2.findings.some((f) => f.file.includes('Panel')), 'an ordinary component is still judged');
+
+  rmSync(dir, { recursive: true, force: true });
+}
+
+// ---- the voice: no em-dashes in anything a person reads ----
+console.log('copy:');
+{
+  const dir = makeRepo();
+  writeFileSync(join(dir, 'components/Hero.tsx'),
+    'export const Hero = () => <div style={{color: "#4a7be8"}} className="mt-[37px]">hi</div>;\n');
+  const term = execFileSync('node', [CLI, dir, '--base', 'HEAD'], { encoding: 'utf8' });
+  const md = execFileSync('node', [CLI, dir, '--base', 'HEAD', '--markdown'], { encoding: 'utf8' });
+  ok(!term.includes('\u2014'), 'the terminal report carries no em-dash');
+  ok(!md.includes('\u2014'), 'the markdown report carries no em-dash');
+  rmSync(dir, { recursive: true, force: true });
+}
+
 console.log('exclusions:');
 {
   const dir = makeRepo();

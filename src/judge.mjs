@@ -23,25 +23,53 @@ const definedComponents = typeof engine.definedComponents === 'function' ? engin
 // towards calling them the same file, which errs towards silence.
 const samePath = (a, b) => a === b || a.endsWith(`/${b}`) || b.endsWith(`/${a}`);
 
-// The honesty exemptions. Email and print styling must be inline, always.
-// Artwork-named files (Icon, Logo, Badge…) are exempt only when their added
-// lines actually draw SVG, so a Badge component that is plain styled UI gets
-// guarded like everything else.
+// The honesty exemptions: files that cannot be on-system by their nature, so
+// judging them is how a checker earns a reputation for crying wolf. Email and
+// print styling must be inline. An OG card or a PDF invoice is a picture drawn
+// with code. A renderer draws pixels. Artwork-named files are exempt only when
+// they actually draw SVG, so a Badge that is plain styled UI is guarded like
+// everything else.
 //
-// The comment here used to claim the engine applied the same list. It did not,
-// which is how roast --check came to raise findings on email templates. The
-// engine now shares this list and exports it; these copies go at the next pin
-// bump, and the claim becomes true rather than aspirational.
+// The engine owns the list now, which is what the comment here always claimed
+// and never was. The copy below is the fallback for an older pinned roast, and
+// is kept complete rather than partial: a false positive the guard could have
+// avoided is not worth waiting a release for. It goes when the pin moves.
 const EMAIL_PRINT_RE = /email|(^|[/.])print([/.]|$)/i;
-const ARTWORK_NAME_RE = /(^|\/)[\w.-]*(icon|logo|badge|illustration|artwork)[\w.-]*\.(tsx|jsx)$/i;
+const ARTWORK_NAME_RE = /(^|\/)[\w.-]*(icon|logo|badge|illustration|shield|artwork|graphic|background)[\w.-]*\.(tsx|jsx)$/i;
 const SVG_MARKUP_RE = /<(svg|path|rect|circle|ellipse|polygon|defs|mask)\b/i;
+const RENDER_TO_IMAGE_RE = /ImageResponse|from ['"]satori['"]|from ['"]@react-pdf|next\/og/;
+const OG_ROUTE_RE = /(^|\/)api\/og\//;
+const RENDERER_PATH_RE = /(^|\/)(renderers?|scene|canvas)\/|renderElement|DebugCanvas/i;
+const svgHeavy = (text) => (text.match(/<(?:svg|path|rect|circle|ellipse|polygon|mask|defs)\b/g) ?? []).length >= 15;
+const localExemptReason = (file, text) => {
+  if (EMAIL_PRINT_RE.test(file)) return 'email or print';
+  if (RENDERER_PATH_RE.test(file)) return 'a pixel renderer';
+  if (OG_ROUTE_RE.test(file) || RENDER_TO_IMAGE_RE.test(text)) return 'a render-to-image surface';
+  if (svgHeavy(text)) return 'mostly drawing';
+  if (ARTWORK_NAME_RE.test(file) && SVG_MARKUP_RE.test(text)) return 'artwork';
+  return null;
+};
+const exemptReason = typeof engine.exemptReason === 'function' ? engine.exemptReason : localExemptReason;
 
-function exemptFiles(added) {
-  const svgish = new Set();
-  for (const { file, text } of added) {
-    if (ARTWORK_NAME_RE.test(file) && SVG_MARKUP_RE.test(text)) svgish.add(file);
+/**
+ * Which files to leave alone. The whole file decides, not the added lines: a
+ * satori import or an SVG drawing sits at the top of a file a diff may never
+ * touch. readFile is how the caller hands over the working tree; without one
+ * the added lines stand in, which sees less and so exempts less.
+ */
+function exemptFiles(added, readFile) {
+  const text = new Map();
+  for (const { file } of added) {
+    if (text.has(file)) continue;
+    let whole = null;
+    if (readFile) { try { whole = readFile(file); } catch { whole = null; } }
+    text.set(file, whole ?? added.filter((a) => a.file === file).map((a) => a.text).join('\n'));
   }
-  return (file) => EMAIL_PRINT_RE.test(file) || svgish.has(file);
+  const verdict = new Map();
+  return (file) => {
+    if (!verdict.has(file)) verdict.set(file, Boolean(exemptReason(file, text.get(file) ?? '')));
+    return verdict.get(file);
+  };
 }
 
 const FONT_LINE_RE = /font-family\s*:\s*([^;{}]+)/i;
@@ -69,13 +97,13 @@ const extraValue = (re, text) => {
  * kinds: color | spacing | radius | fontsize | shadow | arbitrary |
  *        important | font | inline | component
  */
-export function judge(added, system) {
+export function judge(added, system, { readFile } = {}) {
   const tokenSet = new Set(system.tokens);
 
   // The system was learned from the tree that already CONTAINS these added
   // lines, so a new value would vouch for itself. A value is only "known"
   // if the repo uses it more times than this change added it.
-  const exempt = exemptFiles(added);
+  const exempt = exemptFiles(added, readFile);
   const addedLengths = new Map(), addedFaces = new Map();
   const addedExtras = { radius: new Map(), fontsize: new Map(), shadow: new Map() };
   for (const { file, line, text } of added) {
@@ -150,7 +178,7 @@ export function judge(added, system) {
         advice: near && near.distance <= 48
           ? `nearest token: ${named(near.value)}`
           : system.tokenFile
-            ? `no token resembles it — if it is a real decision, it belongs in ${system.tokenFile}`
+            ? `no token resembles it, and if it is a real decision it belongs in ${system.tokenFile}`
             : 'no token layer found to compare against',
       });
     }

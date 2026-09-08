@@ -53,7 +53,7 @@ let added;
 try {
   added = addedLines(cwd, base);
 } catch (e) {
-  console.error(`guard: git diff failed — ${e.message.split('\n')[0]}`);
+  console.error(`guard: git diff failed. ${e.message.split('\n')[0]}`);
   process.exit(2);
 }
 
@@ -71,7 +71,17 @@ ignorePrefixes = ignorePrefixes.map((p) => p.replace(/^\.?\//, '').replace(/\/?$
 const judged = added.filter(({ file }) => !ignorePrefixes.some((p) => (file + '/').startsWith(p)));
 
 const system = learnSystem(cwd, { exclude });
-let findings = judge(judged, system);
+// The judge asks for whole files when deciding what to leave alone: a satori
+// import or an SVG drawing sits at the top of a file the diff never touches.
+const wholeFile = new Map();
+const readWhole = (file) => {
+  if (!wholeFile.has(file)) {
+    try { wholeFile.set(file, readFileSync(resolve(cwd, file), 'utf8')); }
+    catch { wholeFile.set(file, null); }
+  }
+  return wholeFile.get(file);
+};
+let findings = judge(judged, system, { readFile: readWhole });
 
 // The escape hatch: a `guard-ignore-next-line` comment silences every finding
 // on the line below it. Checked against the file as it stands (not just the
