@@ -14,6 +14,7 @@ const KIND_LABEL = {
   important: '!important',
   font: 'new typeface',
   inline: 'inline style block',
+  component: 'second definition of',
 };
 
 // Kinds whose label already says everything; printing the value repeats it.

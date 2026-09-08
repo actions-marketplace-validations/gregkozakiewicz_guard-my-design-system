@@ -11,11 +11,27 @@ import {
   extractStyling, normalizeHex, nearestColor, nearestLength,
   isCodeFile, isStyleFile, typefaceOf, GENERIC_FONTS,
 } from 'roast-my-design-system/engine';
+// The component ledger arrived in a later engine than the one this package may
+// be pinned to. Read through the namespace and feature-detect it, so an older
+// roast means one check fewer rather than a crash.
+import * as engine from 'roast-my-design-system/engine';
+const definedComponents = typeof engine.definedComponents === 'function' ? engine.definedComponents : null;
 
-// Same honesty exemptions the engine applies: email and print styling must be
-// inline, always. Artwork-named files (Icon, Logo, Badge…) are exempt only
-// when their added lines actually draw SVG — a Badge component that is plain
-// styled UI gets guarded like everything else.
+// git prints diff paths from the repository root; the engine lists them from
+// the directory it scanned. When the guard runs in a subdirectory the two
+// disagree by a prefix, so a suffix match stands in for equality. It errs
+// towards calling them the same file, which errs towards silence.
+const samePath = (a, b) => a === b || a.endsWith(`/${b}`) || b.endsWith(`/${a}`);
+
+// The honesty exemptions. Email and print styling must be inline, always.
+// Artwork-named files (Icon, Logo, Badge…) are exempt only when their added
+// lines actually draw SVG, so a Badge component that is plain styled UI gets
+// guarded like everything else.
+//
+// The comment here used to claim the engine applied the same list. It did not,
+// which is how roast --check came to raise findings on email templates. The
+// engine now shares this list and exports it; these copies go at the next pin
+// bump, and the claim becomes true rather than aspirational.
 const EMAIL_PRINT_RE = /email|(^|[/.])print([/.]|$)/i;
 const ARTWORK_NAME_RE = /(^|\/)[\w.-]*(icon|logo|badge|illustration|artwork)[\w.-]*\.(tsx|jsx)$/i;
 const SVG_MARKUP_RE = /<(svg|path|rect|circle|ellipse|polygon|defs|mask)\b/i;
@@ -51,7 +67,7 @@ const extraValue = (re, text) => {
  * Judge added lines against the learned system.
  * Returns [{ file, line, kind, value, advice }] sorted by file then line.
  * kinds: color | spacing | radius | fontsize | shadow | arbitrary |
- *        important | font | inline
+ *        important | font | inline | component
  */
 export function judge(added, system) {
   const tokenSet = new Set(system.tokens);
@@ -105,6 +121,18 @@ export function judge(added, system) {
   const knownFaces = new Set(
     [...faceCounts].filter(([face, n]) => n > (addedFaces.get(face) ?? 0)).map(([face]) => face)
   );
+  // Components the repo already defines, by name. Pages are routes rather than
+  // reusable parts, so two of a name there is not a second Button.
+  const componentsByName = new Map();
+  if (definedComponents && Array.isArray(system.components)) {
+    for (const c of system.components) {
+      if (c.isPage) continue;
+      const list = componentsByName.get(c.name) ?? [];
+      list.push(c);
+      componentsByName.set(c.name, list);
+    }
+  }
+
   const findings = [];
 
   for (const { file, line, text } of added) {
@@ -161,6 +189,26 @@ export function judge(added, system) {
         file, line, kind: 'inline', value: 'style={{ }}',
         advice: 'the values are invisible to the system and to every agent that reads the file; move them to classes or tokens',
       });
+    }
+
+    // A hand-rolled second <Button> is the most expensive thing a pull request
+    // can add, and it was the one thing the guard could not see. The scan
+    // includes this change, so the new copy is in the ledger too: what counts
+    // is whether the name lives anywhere ELSE.
+    if (!css && componentsByName.size) {
+      for (const name of definedComponents(text)) {
+        const elsewhere = (componentsByName.get(name) ?? []).filter((c) => !samePath(c.file, file));
+        if (!elsewhere.length) continue;
+        const best = [...elsewhere].sort((a, b) => b.usageCount - a.usageCount)[0];
+        findings.push({
+          file, line, kind: 'component', value: name,
+          // never open the advice with the path: the report capitalises the
+          // first letter, and a capitalised path is the wrong path
+          advice: elsewhere.length > 1
+            ? `${elsewhere.length} other files define it too; import ${best.file}, the one the codebase leans on`
+            : `import ${best.file} rather than starting a second one${best.usageCount ? `, which ${best.usageCount} place${best.usageCount === 1 ? '' : 's'} already do` : ''}`,
+        });
+      }
     }
 
     for (const a of seen.arbitrary) {

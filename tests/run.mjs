@@ -188,6 +188,37 @@ console.log('inline styles:');
   rmSync(dir, { recursive: true, force: true });
 }
 
+// ---- a second definition of the same component ----
+// The highest-value check the engine had, missing from the path that runs on
+// every pull request (2026-09-08). Needs a ledger only a newer engine exports,
+// so it is skipped rather than failed when the pin is behind.
+console.log('duplicate components:');
+{
+  const engineApi = await import('roast-my-design-system/engine');
+  if (typeof engineApi.definedComponents !== 'function' ) {
+    console.log('  – skipped: the pinned engine exports no component ledger yet');
+  } else {
+    const dir = makeRepo();
+    writeFileSync(join(dir, 'components/ButtonV2.tsx'),
+      'export const Button = () => <button className="p-4">also ok</button>;\n');
+    const r = run(dir);
+    const dupes = r.findings.filter((f) => f.kind === 'component');
+    ok(dupes.length === 1, `a second <Button> is caught (got ${dupes.length})`);
+    ok(dupes[0]?.value === 'Button', 'the finding names the component');
+    ok(dupes[0]?.advice.includes('components/Button.tsx'), 'the advice names the one to import');
+
+    // editing the component that already exists is not a second one
+    writeFileSync(join(dir, 'components/ButtonV2.tsx'), '');
+    writeFileSync(join(dir, 'components/Button.tsx'),
+      'export const Button = () => <button className="p-4 gap-2">ok</button>;\n');
+    const edit = run(dir);
+    ok(edit.findings.filter((f) => f.kind === 'component').length === 0,
+      'editing the original is not a duplicate of itself');
+
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 // ---- disciplined values of the new kinds stay silent ----
 console.log('new kinds, clean:');
 {
