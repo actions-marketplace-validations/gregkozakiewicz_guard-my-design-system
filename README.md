@@ -50,7 +50,7 @@ it updates that same comment. It never adds more comments:
   the nearest existing value named.
 - **A typeface your system does not declare.**
 - **`!important`.**
-- **Arbitrary Tailwind values** such as `w-[137px]` and `mt-[37px]`.
+- **Arbitrary Tailwind values** such as `w-[137px]` and `text-[10px]`. A bracket on a spacing utility, such as `mt-[37px]`, is reported as off-scale spacing instead, with the nearest scale step named.
 - **An inline `style={{ }}` block.** Styling written there is invisible to the
   system and to every agent that reads the file. Blocks built from variables
   are decided elsewhere, so they are left alone.

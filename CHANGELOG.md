@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.5.0 — 11 Sep 2026
+
+The engine moves to roast 7.0.0.
+
+- **A bracket on a spacing utility is one finding, not two.** `mt-[37px]` used
+  to be flagged as an arbitrary value. It is now flagged as off-scale spacing,
+  with the nearest scale step named, the same way the roaster counts it. Other
+  brackets, such as `text-[10px]` or `w-[137px]`, are still arbitrary values.
+- **Fewer false flags from the engine.** A hex colour inside a CSS comment, or
+  an id selector that spells hex such as `#face`, is no longer read as a
+  colour. Files over 2 MB and symlinked files are skipped when the guard
+  learns the system.
+- **Faster on large repos.** Learning the system on a big monorepo is several
+  times quicker; the results are identical.
+
 ## 1.4.1 — 11 Sep 2026
 
 The engine moves to roast 6.0.1 and three alignments land. Nothing new is

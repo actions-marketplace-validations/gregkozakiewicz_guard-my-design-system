@@ -55,11 +55,15 @@ console.log('sinful change:');
   const r = run(dir);
   const kinds = r.findings.map((f) => f.kind).sort().join(',');
   ok(r.findings.length === 7, `finds 7 issues (got ${r.findings.length})`);
-  ok(kinds === 'arbitrary,color,color,font,important,inline,spacing', `kinds are right (${kinds})`);
+  // Since roaster 7.0.0 a bracket on a spacing utility (mt-[37px]) is judged
+  // as off-scale spacing, not as an arbitrary value: one class, one finding.
+  ok(kinds === 'color,color,font,important,inline,spacing,spacing', `kinds are right (${kinds})`);
   const stray = r.findings.find((f) => f.kind === 'color' && f.value === '#3564cc');
   ok(stray?.advice.includes('#3b6fe0'), 'stray colour names its nearest token');
-  const spacing = r.findings.find((f) => f.kind === 'spacing');
-  ok(spacing?.value === '13px' && spacing.advice.includes('12px'), 'off-scale spacing names the nearest step');
+  const spacing = r.findings.find((f) => f.kind === 'spacing' && f.value === '13px');
+  ok(spacing && spacing.advice.includes('12px'), 'off-scale spacing names the nearest step');
+  const bracket = r.findings.find((f) => f.kind === 'spacing' && f.value === '37px');
+  ok(bracket && bracket.file.endsWith('Hero.tsx'), 'a bracket spacing class is off-scale spacing, judged once');
   ok(r.findings.every((f) => f.file && f.line > 0), 'every finding carries file and line');
 
   rmSync(dir, { recursive: true, force: true });
