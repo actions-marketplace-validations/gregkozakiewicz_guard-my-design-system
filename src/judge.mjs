@@ -11,7 +11,7 @@ import {
   extractStyling, normalizeHex, nearestColor, nearestLength,
   isCodeFile, isStyleFile, typefaceOf, GENERIC_FONTS,
   definedComponents, exemptReason,
-  EXTRA_KINDS, FONT_LINE_RE, extraValue,
+  EXTRA_KINDS, extraValue, fontDeclarations,
 } from 'roast-my-design-system/engine';
 
 // git prints diff paths from the repository root; the engine lists them from
@@ -79,9 +79,12 @@ export function judge(added, system, { readFile } = {}) {
         if (v) addedExtras[kind].set(v, (addedExtras[kind].get(v) ?? 0) + 1);
       }
     }
-    const fm = css ? FONT_LINE_RE.exec(text) : null;
-    const face = fm ? typefaceOf(fm[1].trim()) : null;
-    if (face) addedFaces.set(face, (addedFaces.get(face) ?? 0) + 1);
+    if (css) {
+      for (const d of fontDeclarations(text)) {
+        const face = typefaceOf(d.raw);
+        if (face) addedFaces.set(face, (addedFaces.get(face) ?? 0) + 1);
+      }
+    }
   }
   const knownLengths = new Set(
     system.spacing.filter((s) => s.count > (addedLengths.get(s.value) ?? 0)).map((s) => s.value)
@@ -213,16 +216,20 @@ export function judge(added, system, { readFile } = {}) {
       });
     }
 
-    const fm = css ? FONT_LINE_RE.exec(text) : null;
-    if (fm && !/^(var\(--[\w-]+\)|inherit)$/i.test(fm[1].trim())) {
-      const face = typefaceOf(fm[1].trim());
-      if (face && !GENERIC_FONTS.has(face.toLowerCase()) && !knownFaces.has(face)) {
-        findings.push({
-          file, line, kind: 'font', value: face,
-          advice: knownFaces.size
-            ? `the system declares: ${[...knownFaces].join(', ')}`
-            : 'first typeface declared in this codebase',
-        });
+    // The engine's fontDeclarations decides what a judgeable font value is
+    // (benign token references filtered inside it), so the counter and the
+    // checker can never disagree about fonts either.
+    if (css) {
+      for (const d of fontDeclarations(text)) {
+        const face = typefaceOf(d.raw);
+        if (face && !GENERIC_FONTS.has(face.toLowerCase()) && !knownFaces.has(face)) {
+          findings.push({
+            file, line, kind: 'font', value: face,
+            advice: knownFaces.size
+              ? `the system declares: ${[...knownFaces].join(', ')}`
+              : 'first typeface declared in this codebase',
+          });
+        }
       }
     }
   }

@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.4.1 — 11 Sep 2026
+
+The engine moves to roast 6.0.1 and three alignments land. Nothing new is
+flagged; two wrong flags are gone.
+
+- **Dark themes are the system working.** Through the engine's `tokenColors`,
+  the guard now recognises every colour the system names, dark variants
+  included. A dark-theme value passes; a near-miss snaps to the dark token:
+  "nearest token: `var(--background)`, hsl(224 71% 4%)" — never the light
+  twin. Verified on shadcn-ui/taxonomy.
+- **`var(--x, fallback)` is benign everywhere.** A token reference with a
+  fallback is still the system deciding. Previously it was flagged as a new
+  radius (and worse, `var(--font-sans, sans-serif)` produced a phantom
+  typeface finding). The guard's last private copy of the benign rule is
+  gone: fonts now go through the engine's `fontDeclarations`, so counter and
+  checker share one definition of a token reference.
+
+Suite grows to 46 checks.
+
+
 The promise behind every number: a patch release never changes what gets
 flagged. If a version flags something new, it is a minor or major bump and
 this file says what, in one plain line.

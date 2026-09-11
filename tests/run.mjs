@@ -327,6 +327,35 @@ console.log('exclusions:');
 }
 
 // ---- the escape hatch ----
+// ---- a dark theme is the system working ----
+console.log('dark theme:');
+{
+  const dir = makeRepo();
+  writeFileSync(join(dir, 'styles/themes.css'),
+    ':root { --surface: hsl(0 0% 100%); }\n.dark { --surface: 224 71% 4%; }\n');
+  git(dir, 'add', '-A');
+  git(dir, 'commit', '-qm', 'themes');
+  appendFileSync(join(dir, 'styles/site.css'), '.panel { background: hsl(224 71% 4%); }\n');
+  const r = run(dir);
+  ok(r.findings.length === 0, 'a dark-theme token value is on-system, not a stray');
+  appendFileSync(join(dir, 'styles/site.css'), '.panel-b { background: #04081a; }\n');
+  const r2 = run(dir);
+  const c = r2.findings.find((f) => f.kind === 'color');
+  ok(c?.advice.includes('hsl(224 71% 4%)'), `near-dark stray snaps to the dark variant (${c?.advice})`);
+  rmSync(dir, { recursive: true, force: true });
+}
+
+// ---- a var() with a fallback is still the system deciding ----
+console.log('token reference with fallback:');
+{
+  const dir = makeRepo();
+  appendFileSync(join(dir, 'styles/site.css'),
+    '.x { border-radius: var(--radius, 4px); font-family: var(--font-sans, sans-serif); }\n');
+  const r = run(dir);
+  ok(r.findings.length === 0, 'var(--x, fallback) is benign for radius and font alike');
+  rmSync(dir, { recursive: true, force: true });
+}
+
 console.log('escape hatch:');
 {
   const dir = makeRepo();
