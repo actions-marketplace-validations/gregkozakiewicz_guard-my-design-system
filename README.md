@@ -56,6 +56,16 @@ it updates that same comment. It never adds more comments:
   are decided elsewhere, so they are left alone.
 - **A second definition of a component you already have.** The finding names
   the file that already defines it, and how many places use that one.
+- **A palette colour where a theme variable exists.** On a shadcn repo whose
+  theme file holds the variables, `text-slate-500` in the app's own code is
+  flagged and the theme file named. Off on utility-class installs.
+
+It reads the repo the way the roast report does. On a shadcn repo the
+installed catalogue, installed registries and kit blocks are not judged:
+`shadcn add` is not a sin. On a repo that publishes a shadcn registry only
+the published folders are judged. `!important` in an embedded widget's
+stylesheet, or on a selector made of a library's own class names, is the
+medium and passes.
 
 It ignores everything that was already in the codebase. It asks one question
 of a change: does it make things worse?

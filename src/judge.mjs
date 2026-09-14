@@ -12,7 +12,38 @@ import {
   isCodeFile, isStyleFile, typefaceOf, GENERIC_FONTS,
   definedComponents, exemptReason,
   EXTRA_KINDS, extraValue, fontDeclarations,
+  WIDGET_CSS_RE, isLibraryClass, PALETTE_CLASS_RE,
 } from 'roast-my-design-system/engine';
+
+// Folder membership, the way the engine's own splits do it.
+const underAny = (file, dirs) => (dirs ?? []).some((d) => file === d || file.startsWith(`${d}/`) || file.endsWith(`/${d}`) || file.includes(`/${d}/`));
+
+// The selector of the innermost block an added line sits in, read from the
+// whole file: scan back from the line to the nearest unclosed "{" and take
+// what precedes it. Null when the line is not inside a block.
+function selectorAt(whole, lineNo) {
+  if (!whole) return null;
+  const lines = whole.split('\n');
+  // include the added line itself up to the declaration: the block often
+  // opens on the same line (`.cm-editor { font: x !important; }`)
+  const cur = lines[lineNo - 1] ?? '';
+  const cut = cur.search(/!\s*important/i);
+  const upto = lines.slice(0, Math.max(0, lineNo - 1)).join('\n') + '\n' + (cut >= 0 ? cur.slice(0, cut) : cur);
+  let depth = 0;
+  for (let i = upto.length - 1; i >= 0; i--) {
+    const ch = upto[i];
+    if (ch === '}') depth++;
+    else if (ch === '{') {
+      if (depth === 0) {
+        const before = upto.slice(0, i);
+        const start = Math.max(before.lastIndexOf('}'), before.lastIndexOf(';'), before.lastIndexOf('{'));
+        return before.slice(start + 1).trim().split('\n').pop().trim();
+      }
+      depth--;
+    }
+  }
+  return null;
+}
 
 // git prints diff paths from the repository root; the engine lists them from
 // the directory it scanned. When the guard runs in a subdirectory the two
@@ -59,6 +90,22 @@ function exemptFiles(added, readFile) {
  */
 export function judge(added, system, { readFile } = {}) {
   const tokenSet = new Set(system.tokens);
+  // How the repo was read, from the engine's own profiles (roast 7.8):
+  // installed code is not the change's sin, a registry is judged on what it
+  // publishes, and a palette class counts only where a theme variable exists.
+  const prof = system.profile ?? {};
+  const installed = prof.installedDirs ?? [];
+  const counted = prof.registry?.countedDirs ?? [];
+  const variants = prof.registry?.variants ?? [];
+  const blockDirs = prof.registry?.blockDirs ?? [];
+  const outOfScope = (file) => underAny(file, installed) || (counted.length > 0 && !underAny(file, counted));
+  const whole = new Map();
+  const wholeText = (file) => {
+    if (!whole.has(file)) { let t = null; if (readFile) { try { t = readFile(file); } catch { t = null; } } whole.set(file, t); }
+    return whole.get(file);
+  };
+  const isWidgetFile = (file) => underAny(file, prof.widgetDirs) || WIDGET_CSS_RE.test(wholeText(file) ?? '');
+  const paletteRe = new RegExp(PALETTE_CLASS_RE.source, 'g');
 
   // The system was learned from the tree that already CONTAINS these added
   // lines, so a new value would vouch for itself. A value is only "known"
@@ -67,7 +114,7 @@ export function judge(added, system, { readFile } = {}) {
   const addedLengths = new Map(), addedFaces = new Map();
   const addedExtras = { radius: new Map(), fontsize: new Map(), shadow: new Map() };
   for (const { file, line, text } of added) {
-    if (exempt(file)) continue;
+    if (exempt(file) || outOfScope(file)) continue;
     const css = isStyleFile(file);
     if (!css && !isCodeFile(file)) continue;
     for (const s of extractStyling(text, { css }).spacing) {
@@ -127,7 +174,7 @@ export function judge(added, system, { readFile } = {}) {
   const findings = [];
 
   for (const { file, line, text } of added) {
-    if (exempt(file)) continue;
+    if (exempt(file) || outOfScope(file)) continue;
     const css = isStyleFile(file);
     if (!css && !isCodeFile(file)) continue;
 
@@ -188,7 +235,12 @@ export function judge(added, system, { readFile } = {}) {
     // is whether the name lives anywhere ELSE.
     if (!css && componentsByName.size) {
       for (const name of definedComponents(text)) {
-        const elsewhere = (componentsByName.get(name) ?? []).filter((c) => !samePath(c.file, file));
+        const variantOf = (f) => variants.find((v) => underAny(f, [v])) ?? null;
+        const elsewhere = (componentsByName.get(name) ?? []).filter((c) => !samePath(c.file, file))
+          // a registry keeps the same component in sibling variants, and a
+          // block installs alone: neither is a second Button
+          .filter((c) => !(variantOf(file) && variantOf(c.file) && variantOf(c.file) !== variantOf(file)))
+          .filter((c) => !(underAny(file, blockDirs) && underAny(c.file, blockDirs)));
         if (!elsewhere.length) continue;
         const best = [...elsewhere].sort((a, b) => b.usageCount - a.usageCount)[0];
         findings.push({
@@ -209,11 +261,33 @@ export function judge(added, system, { readFile } = {}) {
       });
     }
 
-    for (const _ of seen.important) {
-      findings.push({
-        file, line, kind: 'important', value: '!important',
-        advice: 'the cascade admitting defeat; raise specificity or fix the source order',
-      });
+    // !important is the medium, not the mess, in two places the report also
+    // sets aside: a widget stylesheet that must beat its host page, and a
+    // selector aimed only at a library's own class names.
+    if (seen.important.length && !(css && isWidgetFile(file))) {
+      const sel = css ? selectorAt(wholeText(file), line) : null;
+      const classes = sel ? [...sel.matchAll(/\.([A-Za-z_][\w-]*)/g)].map((m) => m[1]) : [];
+      const libraryAimed = classes.length > 0 && classes.every(isLibraryClass);
+      if (!libraryAimed) {
+        for (const _ of seen.important) {
+          findings.push({
+            file, line, kind: 'important', value: '!important',
+            advice: 'the cascade admitting defeat; raise specificity or fix the source order',
+          });
+        }
+      }
+    }
+
+    // A palette class where a theme variable exists (a shadcn kit in
+    // CSS-variable mode): paint from a tin. The same pattern the report
+    // counts per 100 files; here, per added line.
+    if (!css && prof.paletteReady) {
+      for (const m of text.matchAll(paletteRe)) {
+        findings.push({
+          file, line, kind: 'palette', value: m[0],
+          advice: `a theme variable covers this; use a semantic class such as bg-primary or text-muted-foreground, or add a variable${prof.sheetFile ? ` to ${prof.sheetFile}` : ''}`,
+        });
+      }
     }
 
     // The engine's fontDeclarations decides what a judgeable font value is

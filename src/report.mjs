@@ -15,6 +15,7 @@ const KIND_LABEL = {
   font: 'new typeface',
   inline: 'inline style block',
   component: 'second definition of',
+  palette: 'palette colour where a theme variable exists',
 };
 
 // Kinds whose label already says everything; printing the value repeats it.

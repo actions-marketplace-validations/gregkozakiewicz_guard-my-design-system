@@ -407,5 +407,81 @@ console.log('not a git repo:');
   rmSync(dir, { recursive: true, force: true });
 }
 
+
+// ---- the profile facts from roast 7.8: installed code, palette, registry ----
+console.log('shadcn kit:');
+const SHEET = ':root {\n' + ['background', 'foreground', 'primary', 'primary-foreground', 'muted', 'muted-foreground', 'border', 'input', 'ring', 'card'].map((r) => `  --${r}: oklch(0.5 0 0);`).join('\n') + '\n}\n.dark {\n' + ['background', 'foreground', 'primary', 'muted-foreground', 'border', 'ring'].map((r) => `  --${r}: oklch(0.2 0 0);`).join('\n') + '\n}\n';
+function makeKit() {
+  const dir = mkdtempSync(join(tmpdir(), 'guard-kit-'));
+  mkdirSync(join(dir, 'app'), { recursive: true });
+  mkdirSync(join(dir, 'components/ui'), { recursive: true });
+  mkdirSync(join(dir, 'lib'), { recursive: true });
+  git(dir, 'init', '-qb', 'main');
+  writeFileSync(join(dir, 'package.json'), '{ "name": "kit", "dependencies": { "next": "16.0.0", "react": "19.0.0", "tailwindcss": "4.0.0" } }\n');
+  writeFileSync(join(dir, 'tsconfig.json'), '{ "compilerOptions": { "paths": { "@/*": ["./*"] } } }\n');
+  writeFileSync(join(dir, 'components.json'), '{ "style": "base-nova", "tailwind": { "css": "app/globals.css", "baseColor": "neutral", "cssVariables": true }, "aliases": { "components": "@/components", "utils": "@/lib/utils", "ui": "@/components/ui" } }\n');
+  writeFileSync(join(dir, 'app/globals.css'), SHEET);
+  writeFileSync(join(dir, 'lib/utils.ts'), 'export const cn = (...a) => a.join(" ");\n');
+  writeFileSync(join(dir, 'components/ui/button.tsx'), 'export function Button(p) { return <button data-slot="button" className="bg-primary text-primary-foreground ring-[3px]" {...p} />; }\n');
+  writeFileSync(join(dir, 'components/ui/card.tsx'), 'export function Card(p) { return <div data-slot="card" className="bg-card" {...p} />; }\n');
+  writeFileSync(join(dir, 'app/page.tsx'), 'import { Button } from "@/components/ui/button";\nexport default function Page() { return <main className="p-6"><Button>ok</Button></main>; }\n');
+  git(dir, 'add', '-A');
+  git(dir, 'commit', '-qm', 'base');
+  return dir;
+}
+{
+  const dir = makeKit();
+  // shadcn add sheet: a new door in the catalogue carries shadcn's brackets
+  writeFileSync(join(dir, 'components/ui/sheet.tsx'), 'export function Sheet(p) { return <div data-slot="sheet" className="translate-x-[2.5rem] text-[0.8rem] bg-blue-500" {...p} />; }\n');
+  const r = run(dir);
+  ok(r.findings.length === 0, `a component added to the installed catalogue is not the change's sin (got ${r.findings.length})`);
+  // the same class in own code is paint from a tin
+  writeFileSync(join(dir, 'app/page.tsx'), 'export default function Page() { return <main className="p-6 text-slate-500 bg-blue-500/20">hi</main>; }\n');
+  const r2 = run(dir);
+  const palette = r2.findings.filter((f) => f.kind === 'palette');
+  ok(palette.length === 2, `palette classes in own code are flagged where a theme variable exists (got ${palette.length})`);
+  ok(palette[0]?.advice.includes('app/globals.css'), 'the advice names the theme file');
+  ok(r2.findings.every((f) => !f.file.includes('components/ui/')), 'nothing inside the catalogue is judged');
+}
+
+console.log('!important as the medium:');
+{
+  const dir = makeRepo();
+  appendFileSync(join(dir, 'styles/site.css'), '.cm-editor { font-family: monospace !important; }\n.cm-gutters { padding-right: 12px !important; }\n.hero { color: red !important; }\n');
+  const r = run(dir);
+  const imp = r.findings.filter((f) => f.kind === 'important');
+  ok(imp.length === 1, `!important aimed at a code editor's class names is the medium; the team's own is not (got ${imp.length})`);
+  ok(imp[0]?.line === 6 || imp[0]?.file.endsWith('site.css'), 'the remaining finding is the .hero one');
+}
+{
+  const dir = makeRepo();
+  writeFileSync(join(dir, 'styles/widget.css'), '@import "tailwindcss/utilities.css" layer(utilities) important;\n#w .btn { color: red !important; }\n');
+  const r = run(dir);
+  ok(r.findings.filter((f) => f.kind === 'important').length === 0, 'a widget stylesheet that must beat its host page is the medium');
+}
+
+console.log('registry: judged on what it publishes:');
+{
+  const dir = mkdtempSync(join(tmpdir(), 'guard-reg-'));
+  mkdirSync(join(dir, 'registry/ui'), { recursive: true });
+  mkdirSync(join(dir, 'app'), { recursive: true });
+  git(dir, 'init', '-qb', 'main');
+  writeFileSync(join(dir, 'package.json'), '{ "name": "reg" }\n');
+  writeFileSync(join(dir, 'registry.json'), JSON.stringify({ name: 'reg', items: [{ name: 'pill', type: 'registry:ui', files: [{ path: 'registry/ui/pill.tsx', type: 'registry:ui' }] }] }) + '\n');
+  writeFileSync(join(dir, 'registry/ui/pill.tsx'), 'export function Pill(p) { return <span className="rounded-md" {...p} />; }\n');
+  writeFileSync(join(dir, 'app/page.tsx'), 'export default function Page() { return <main>docs</main>; }\n');
+  writeFileSync(join(dir, 'app/site.css'), '--ink: #101010;\n.doc { color: var(--ink); }\n');
+  git(dir, 'add', '-A');
+  git(dir, 'commit', '-qm', 'base');
+  // a stray colour in the docs site: not published, not judged
+  appendFileSync(join(dir, 'app/site.css'), '.promo { color: #ff6600; }\n');
+  const r = run(dir);
+  ok(r.findings.length === 0, `the docs site of a registry is not judged (got ${r.findings.length})`);
+  // the same stray in a published component: judged
+  writeFileSync(join(dir, 'registry/ui/pill.tsx'), 'export function Pill(p) { return <span className="rounded-md" style={{ color: "#ff6600" }} {...p} />; }\n');
+  const r2 = run(dir);
+  ok(r2.findings.some((f) => f.file.includes('registry/ui/pill.tsx')), 'a published component is judged as the project\'s own work');
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

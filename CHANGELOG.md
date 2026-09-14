@@ -1,5 +1,35 @@
 # Changelog
 
+## 1.6.0 — 14 Sep 2026
+
+The engine moves to roast 7.8.0, and the guard reads the repo the way the
+report does: four profiles, installed code, registries, and two cases where
+`!important` is the medium.
+
+- **Installed code is not the change's sin.** On a shadcn repo, a component
+  added to the catalogue (`shadcn add sheet`), an installed registry or a kit
+  block is left alone: shadcn's bracket values and a registry's colours are
+  named in the roast report, never prompted, and now never flagged here.
+  Before this release a pull request that ran `shadcn add` was flagged for
+  values shadcn wrote.
+- **A palette colour where a theme variable exists.** New kind, `palette`,
+  on a shadcn repo whose theme file holds the variables: `text-slate-500` or
+  `bg-blue-500/20` in the app's own code is flagged, with the theme file
+  named. Same pattern the report counts per 100 files. Off on utility-class
+  installs and on repos without a theme file.
+- **`!important` as the medium.** Two cases the report sets aside since
+  roast 7.5 are set aside here too: a stylesheet that imports Tailwind with
+  the `important` flag or sits in a package whose Tailwind config scopes
+  utilities under an id (an embedded widget), and a declaration whose
+  selector names only a library's own class names (`.cm-editor`,
+  `.react-datepicker`). The team's own `!important` is still flagged.
+- **A registry is judged on what it publishes.** On a repo that publishes a
+  shadcn registry, only the published folders are judged; the docs site,
+  demos and examples are not. A component that also exists in a sibling
+  variant, or in another published block, is not a second definition.
+- **The Next.js crash page** (`global-error.tsx`) is exempt, through the
+  engine's shared list.
+
 ## 1.5.0 — 11 Sep 2026
 
 The engine moves to roast 7.0.0.
