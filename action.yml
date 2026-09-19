@@ -1,5 +1,5 @@
 name: guard-my-design-system
-description: "Your design system dies one pull request at a time. This makes sure it doesn't. Judges only the lines a PR adds."
+description: "Your design system dies one pull request at a time. This makes sure it doesn’t. Judges only the lines a PR adds."
 branding:
   icon: shield
   color: gray-dark
@@ -32,7 +32,7 @@ runs:
         if [ "$STRICT" = "true" ]; then
           COUNT=$(node -e "console.log(JSON.parse(require('fs').readFileSync('guard-findings.json','utf8')).findings.length)")
           if [ "$COUNT" != "0" ]; then
-            echo "guard: $COUNT new issue(s) — strict mode fails the check"
+            echo "guard: $COUNT new issue(s). Strict mode fails the check."
             exit 1
           fi
         fi

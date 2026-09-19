@@ -23,7 +23,7 @@ const pr = event?.pull_request?.number;
 
 if (!token || !repo || !pr) {
   console.log(markdownReport(findings));
-  console.log('\nguard: not a pull request context (or no GITHUB_TOKEN) — printed instead of commented.');
+  console.log('\nguard: not a pull request context (or no GITHUB_TOKEN), so this is printed instead of commented.');
   process.exit(0);
 }
 

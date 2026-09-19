@@ -7,10 +7,19 @@
 const KIND_LABEL = {
   color: 'new colour',
   spacing: 'new spacing value',
+  radius: 'new border radius',
+  fontsize: 'new font size',
+  shadow: 'new shadow',
   arbitrary: 'arbitrary Tailwind value',
   important: '!important',
   font: 'new typeface',
+  inline: 'inline style block',
+  component: 'second definition of',
+  palette: 'palette colour where a theme variable exists',
 };
+
+// Kinds whose label already says everything; printing the value repeats it.
+const VALUELESS = new Set(['important', 'inline']);
 
 const FOOTER = 'Full picture of the whole codebase: `npx roast-my-design-system`';
 
@@ -20,7 +29,7 @@ export function terminalReport(findings) {
   }
   const lines = [`guard-my-design-system: ${findings.length} new issue${findings.length === 1 ? '' : 's'} in this change\n`];
   for (const f of findings) {
-    lines.push(`  ${f.file}:${f.line} — ${KIND_LABEL[f.kind]} ${f.value === '!important' ? '' : f.value}`.trimEnd() + `. ${capitalise(f.advice)}.`);
+    lines.push(`  ${f.file}:${f.line} · ${KIND_LABEL[f.kind]} ${VALUELESS.has(f.kind) ? '' : f.value}`.trimEnd() + `. ${capitalise(f.advice)}.`);
   }
   lines.push('');
   lines.push('  Only lines added in this change were counted. The existing codebase was not judged.');
@@ -40,8 +49,7 @@ export function markdownReport(findings) {
   }
   const out = [`**🛡 guard-my-design-system: ${findings.length} new issue${findings.length === 1 ? '' : 's'} in this pull request**`, ''];
   for (const f of findings) {
-    const val = f.kind === 'important' ? '`!important`' : `\`${f.value}\``;
-    out.push(`- \`${f.file}:${f.line}\` — ${KIND_LABEL[f.kind]} ${f.kind === 'important' ? '' : val}`.trimEnd() + `. ${capitalise(f.advice)}.`);
+    out.push(`- \`${f.file}:${f.line}\` · ${KIND_LABEL[f.kind]} ${VALUELESS.has(f.kind) ? '' : `\`${f.value}\``}`.trimEnd() + `. ${capitalise(f.advice)}.`);
   }
   out.push('');
   out.push(`<sub>Only added lines are checked; the existing codebase is never judged. ${FOOTER}</sub>`);

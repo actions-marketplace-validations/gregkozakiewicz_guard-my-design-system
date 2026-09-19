@@ -1,8 +1,193 @@
 # Changelog
 
+## 1.6.0 — 14 Sep 2026
+
+The engine moves to roast 7.8.0, and the guard reads the repo the way the
+report does: four profiles, installed code, registries, and two cases where
+`!important` is the medium.
+
+- **Installed code is not the change's sin.** On a shadcn repo, a component
+  added to the catalogue (`shadcn add sheet`), an installed registry or a kit
+  block is left alone: shadcn's bracket values and a registry's colours are
+  named in the roast report, never prompted, and now never flagged here.
+  Before this release a pull request that ran `shadcn add` was flagged for
+  values shadcn wrote.
+- **A palette colour where a theme variable exists.** New kind, `palette`,
+  on a shadcn repo whose theme file holds the variables: `text-slate-500` or
+  `bg-blue-500/20` in the app's own code is flagged, with the theme file
+  named. Same pattern the report counts per 100 files. Off on utility-class
+  installs and on repos without a theme file.
+- **`!important` as the medium.** Two cases the report sets aside since
+  roast 7.5 are set aside here too: a stylesheet that imports Tailwind with
+  the `important` flag or sits in a package whose Tailwind config scopes
+  utilities under an id (an embedded widget), and a declaration whose
+  selector names only a library's own class names (`.cm-editor`,
+  `.react-datepicker`). The team's own `!important` is still flagged.
+- **A registry is judged on what it publishes.** On a repo that publishes a
+  shadcn registry, only the published folders are judged; the docs site,
+  demos and examples are not. A component that also exists in a sibling
+  variant, or in another published block, is not a second definition.
+- **The Next.js crash page** (`global-error.tsx`) is exempt, through the
+  engine's shared list.
+
+## 1.5.0 — 11 Sep 2026
+
+The engine moves to roast 7.0.0.
+
+- **A bracket on a spacing utility is one finding, not two.** `mt-[37px]` used
+  to be flagged as an arbitrary value. It is now flagged as off-scale spacing,
+  with the nearest scale step named, the same way the roaster counts it. Other
+  brackets, such as `text-[10px]` or `w-[137px]`, are still arbitrary values.
+- **Fewer false flags from the engine.** A hex colour inside a CSS comment, or
+  an id selector that spells hex such as `#face`, is no longer read as a
+  colour. Files over 2 MB and symlinked files are skipped when the guard
+  learns the system.
+- **Faster on large repos.** Learning the system on a big monorepo is several
+  times quicker; the results are identical.
+
+## 1.4.1 — 11 Sep 2026
+
+The engine moves to roast 6.0.1 and three alignments land. Nothing new is
+flagged; two wrong flags are gone.
+
+- **Dark themes are the system working.** Through the engine's `tokenColors`,
+  the guard now recognises every colour the system names, dark variants
+  included. A dark-theme value passes; a near-miss snaps to the dark token:
+  "nearest token: `var(--background)`, hsl(224 71% 4%)" — never the light
+  twin. Verified on shadcn-ui/taxonomy.
+- **`var(--x, fallback)` is benign everywhere.** A token reference with a
+  fallback is still the system deciding. Previously it was flagged as a new
+  radius (and worse, `var(--font-sans, sans-serif)` produced a phantom
+  typeface finding). The guard's last private copy of the benign rule is
+  gone: fonts now go through the engine's `fontDeclarations`, so counter and
+  checker share one definition of a token reference.
+
+Suite grows to 46 checks.
+
+
 The promise behind every number: a patch release never changes what gets
 flagged. If a version flags something new, it is a minor or major bump and
 this file says what, in one plain line.
+
+## 1.4.0 — 8 Sep 2026
+
+Two new things get flagged, and a class of false positive goes away. The guard
+and `roast --check` were answering the same question differently in seven
+places; they now agree.
+
+- **Now flagged: an inline `style={{ }}` block.** A pull request adding
+  `style={{ display: 'flex' }}` carried no colour and no length, so nothing in
+  the judge tripped and it sailed through. Only static blocks count. A block
+  built from variables is decided somewhere else, and the guard cannot know
+  whether that somewhere is on-system, so it stays quiet.
+- **Now flagged: a second definition of a component you already have.** The
+  most expensive thing a pull request can add, and the one thing the guard
+  could not see. The finding names the file that already defines it and how
+  many places use that one. Pages are routes rather than reusable parts, so
+  two of a name there is not a second Button.
+- **No longer flagged: pictures drawn with code.** An OG card, a PDF invoice,
+  a canvas renderer and a file that is mostly SVG are all drawing rather than
+  interface. The roast report has skipped them since 5.10 and the guard did
+  not, so the same file came up clean in one place and full of strays in
+  another. The whole file decides now, not the added lines, because a satori
+  import sits at the top of a file a diff may never touch.
+- **The exemption list, the extra declaration kinds and the component ledger
+  all come from the engine.** The guard used to keep its own copies and a
+  comment claiming they matched the engine's. They did not, and that is how
+  the seven gaps opened. Forty lines of duplicated rules deleted; the claim is
+  now true by construction. Requires roast 5.11.0, which the pin moves to.
+- Em-dashes are gone from everything a person reads: the colour advice, both
+  report formats, the git error and the strict-mode line in the action. A test
+  fails if one comes back. Findings now read `Card.tsx:24 · new colour…`.
+- Suite grows to 43.
+
+## 1.3.5 — 7 Sep 2026
+
+The engine moves to roast 5.10.2 and shadcn repos become legible. Nothing new
+is flagged; the advice gets much truer.
+
+- **shadcn palettes are read for real.** Tailwind v3 shadcn stores tokens as
+  bare HSL triplets; the old engine saw almost none of them, so the guard's
+  colour advice on the most common React stack ran on an empty map. Now a hex
+  stray is matched to the actual palette, across colour notations, and named:
+  "nearest token: `var(--foreground)`, hsl(222.2 47.4% 11.2%)". Verified on
+  shadcn-ui/taxonomy.
+- **The "it belongs in …" advice names the right file** — the token file is
+  now chosen by where the palette lives, not where the most `--var`s sit.
+- Artwork and OG-image routes stop contributing junk values to the learned
+  system, inherited from the engine.
+
+## 1.3.4 — 6 Sep 2026
+
+Docs only: the README rewritten to the GOV.UK plain-language standard — short
+sentences, active voice, everyday words. The slogan, the sample findings and
+the promises all stay; the metaphors go. The command table also gains the
+`--version` row it was missing. Nothing about behaviour changes.
+
+## 1.3.3 — 2 Sep 2026
+
+Docs only: the README and landing page catch up with 1.3.2 — the guard now
+says it reads Lit and Stencil styling, and Honest limits carries the
+css-template line-level gap. Published so npm's copy matches.
+
+## 1.3.2 — 2 Sep 2026
+
+The engine under the guard moves to roast 5.7.2, and the learning gets truer.
+Nothing new is flagged; several wrong flags are gone.
+
+- **Web-component repos are finally legible.** On Lit and Stencil codebases
+  (Shoelace keeps its entire styling in `` css`…` `` templates) the guard now
+  learns the real token layer, spacing scale and typefaces, so its "known" and
+  "nearest" answers stop running on an almost-empty map.
+- **Sass repos judge cleaner:** `$token` references are no longer typefaces,
+  the Sass `color(base)` helper is no longer a colour, fully transparent
+  values no longer pad the palette — inherited straight from the engine.
+- Known gap, stated honestly: inside `` css`…` `` templates the per-line
+  judge catches colours but not yet spacing and friends; the whole-repo
+  learning sees everything.
+
+## 1.3.1 — 31 Aug 2026
+
+One character. The Marketplace sidebar strips a straight apostrophe from the
+action description, so "doesn't" read "doesn t"; a typographic apostrophe
+survives. Nothing else changes.
+
+## 1.3.0 — 31 Aug 2026
+
+The release for the legitimate exception, and for teams not on GitHub.
+
+- **The escape hatch.** A `guard-ignore-next-line` comment silences every
+  finding on the line below it — one line, visibly, with the reason sitting in
+  code review. Checked against the file as it stands, so an exception granted
+  last month still protects its line today. No config file, no rule IDs.
+- **GitLab and Bitbucket recipes.** The README's new "Not on GitHub?" section
+  carries copy-paste pipeline snippets for both; `--strict` fails the step and
+  the verdict prints in the log.
+- The repo grows CONTRIBUTING.md and issue templates — including a dedicated
+  **false positive** template, because a wrong flag on legitimate code is the
+  most serious bug class this tool has.
+
+Nothing new is flagged; the escape hatch can only flag less. Suite grows to
+28 checks.
+
+## 1.2.0 — 31 Aug 2026
+
+The advice names names, and three new kinds are judged. Minor bump: things
+are flagged that 1.1 let through.
+
+- **Advice speaks in variables.** Where the system defines a value as a custom
+  property, findings now say so: "nearest token: `var(--blue-500)`, #3b6fe0"
+  instead of leaving the reader to hunt the hex. Works for colours and for
+  spacing steps alike.
+- **Now flagged, wasn't before:** border radii, font sizes and shadows that
+  the system does not declare, in style files, each with the nearest existing
+  value named. Same self-vouching discount and disciplined-value handling
+  (`var(…)`, `inherit`, `none`, known values) as everything else.
+- Needs roast-my-design-system 5.5.3, which widened the engine doorway to
+  carry the radii, font sizes, shadows and token names the harvest already
+  computed.
+
+Suite grows to 25 checks.
 
 ## 1.1.1 — 29 Aug 2026
 

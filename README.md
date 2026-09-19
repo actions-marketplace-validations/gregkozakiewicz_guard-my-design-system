@@ -4,57 +4,100 @@
 
 ## Your design system dies one pull request at a time. This makes sure it doesn't.
 
-A pull request guard that checks **only the lines a change adds**, says nothing
-about the past, and points each new sin at the on-system value the author
-probably meant. Old wiring is not its business; new sparks are.
+The guard checks pull requests for design-system drift. It looks only at the
+lines a change adds. It never judges the code that was already there. For each
+problem it finds, it names the closest value your system already has:
 
-It speaks in nearests, not scoldings:
+> `Card.tsx:24` · new colour `#4a7be8`. Nearest token: `var(--blue-500)`, `#3b6fe0`.
+>
+> `site.css:31` · new spacing value `13px`. Nearest existing value: `12px`.
+>
+> `site.css:32` · new border radius `5px`. Nearest existing value: `6px`.
+>
+> `site.css:33` · new typeface `Comic Sans MS`. First typeface declared in this codebase.
+>
+> `site.css:35` · `!important`. The cascade admitting defeat; raise specificity or fix the source order.
+>
+> `Panel.tsx:12` · inline style block. The values are invisible to the system and to every agent that reads the file; move them to classes or tokens.
+>
+> `ButtonV2.tsx:1` · second definition of `Button`. Import components/Button.tsx rather than starting a second one.
 
-> `Card.tsx:24` — new colour `#4a7be8`. Nearest token: `#3b6fe0`.
->
-> `site.css:31` — new spacing value `13px`. Nearest existing value: `12px`.
->
-> `site.css:33` — new typeface `Comic Sans MS`. First typeface declared in this codebase.
->
-> `site.css:35` — `!important`. The cascade admitting defeat; raise specificity or fix the source order.
-
-It learns your system by scanning your repo with the
+It learns your design system by scanning your repository with the
 [roast-my-design-system](https://github.com/gregkozakiewicz/roast-my-design-system)
-engine, then judges the diff against what it learned. No config files, no rules
-to write, no tokens to register. Your codebase is the rulebook.
+engine. It reads CSS, SCSS, styled components, Lit `` css`…` `` templates and
+Stencil styling. You do not write any config, rules or token lists. Your
+codebase is the rulebook.
 
-This is what a pull request sees, on real code, with the guard's own comment:
+This is the guard's comment on a real pull request:
 
 ![The guard's comment on a pull request: six new issues, each with a file path and line, the stray colours shown with swatches next to their nearest token, an off-scale spacing value next to its nearest step, a new typeface, an !important, and an arbitrary Tailwind value, ending with the note that only added lines are checked](https://raw.githubusercontent.com/gregkozakiewicz/guard-my-design-system/main/docs/pr-comment.png?v=1.0.2)
 
-One comment per pull request, updated in place as the author fixes things. Push
-a fix and the same comment counts down instead of piling up:
+The guard posts one comment per pull request. When the author pushes fixes,
+it updates that same comment. It never adds more comments:
 
 ![The same pull request after fixes were pushed: the guard's single comment has updated in place, now showing three remaining issues, with the fix commits visible in the timeline above it and all checks passing below](https://raw.githubusercontent.com/gregkozakiewicz/guard-my-design-system/main/docs/pr-comment-updated.png?v=1.0.2)
 
 ## What it catches
 
-- **A hard-coded colour where a token exists**, with the nearest token named.
-- **A spacing value the codebase has never used**, with the nearest step named.
-- **A typeface the system does not declare.**
-- **`!important`**, the cascade admitting defeat.
-- **Arbitrary Tailwind values** (`w-[137px]`, `mt-[37px]`) that sidestep the scale.
+- **A hard-coded colour where a token exists.** The finding names the token:
+  `var(--blue-500)`, not just a hex code. This works across colour notations:
+  a hex stray is matched to an hsl or oklch token, including shadcn's
+  bare-triplet variables. Dark-theme values count as the system too, so a
+  stray in a dark block snaps to the dark token, never its light twin.
+- **A spacing value your codebase has never used**, with the nearest existing
+  step named.
+- **A border radius, font size or shadow your system does not declare**, with
+  the nearest existing value named.
+- **A typeface your system does not declare.**
+- **`!important`.**
+- **Arbitrary Tailwind values** such as `w-[137px]` and `text-[10px]`. A bracket on a spacing utility, such as `mt-[37px]`, is reported as off-scale spacing instead, with the nearest scale step named.
+- **An inline `style={{ }}` block.** Styling written there is invisible to the
+  system and to every agent that reads the file. Blocks built from variables
+  are decided elsewhere, so they are left alone.
+- **A second definition of a component you already have.** The finding names
+  the file that already defines it, and how many places use that one.
+- **A palette colour where a theme variable exists.** On a shadcn repo whose
+  theme file holds the variables, `text-slate-500` in the app's own code is
+  flagged and the theme file named. Off on utility-class installs.
 
-And what it deliberately ignores: everything that was already there. Even if
-the codebase carries years of mess, the guard asks one question of a change:
-does it make things worse?
+It reads the repo the way the roast report does. On a shadcn repo the
+installed catalogue, installed registries and kit blocks are not judged:
+`shadcn add` is not a sin. On a repo that publishes a shadcn registry only
+the published folders are judged. `!important` in an embedded widget's
+stylesheet, or on a selector made of a library's own class names, is the
+medium and passes.
+
+It ignores everything that was already in the codebase. It asks one question
+of a change: does it make things worse?
+
+## When the guard is wrong
+
+Sometimes an off-system value is correct. A partner's brand colour, for
+example. Write a comment on the line above, and the guard lets that one line
+pass:
+
+```css
+/* guard-ignore-next-line — partner brand colour, agreed with design */
+background: #e4002b;
+```
+
+This works in any file the guard reads: `//` in components, `/* */` in styles.
+The comment is visible in code review. It silences exactly one line. It keeps
+working on later pull requests that touch the same line. There is no config
+file and there are no rule IDs.
 
 ## Why this exists
 
-Nobody can win the argument "please go and clean up the codebase". Everyone can
-win "let us at least stop digging". The guard makes not-digging automatic, and
-it matters more now than ever: AI agents write a growing share of UI code, and
-they drift off-system faster than review can catch. Rules files ask nicely; the
-guard checks.
+You cannot ask a team to clean up years of styling. You can stop new problems
+getting in. The guard does that automatically, on every pull request.
+
+It matters more now than ever. AI tools write a growing share of UI code, and
+they drift off-system faster than review can catch. Rules files ask nicely;
+the guard checks.
 
 ## On a pull request
 
-Five minutes, once:
+Set it up once. It takes about five minutes:
 
 ```yaml
 # .github/workflows/guard.yml
@@ -73,9 +116,10 @@ jobs:
       - uses: gregkozakiewicz/guard-my-design-system@v1
 ```
 
-After that you forget it exists, which is the whole point of a smoke alarm.
+After that it runs on every pull request and needs no attention from you.
 
-Prefer a failed check over a comment? Strict mode is the one setting:
+If you want the check to fail instead of commenting, turn on strict mode.
+It is the only setting:
 
 ```yaml
       - uses: gregkozakiewicz/guard-my-design-system@v1
@@ -83,11 +127,15 @@ Prefer a failed check over a comment? Strict mode is the one setting:
           strict: true
 ```
 
-`exclude` keeps folders out of the system scan, same syntax as the CLI below.
+`exclude` keeps folders out of the system scan. It uses the same syntax as
+the CLI below.
+
+If your team pins actions for security, use an exact commit instead of a
+version tag: `uses: gregkozakiewicz/guard-my-design-system@<commit-sha>`.
 
 ## On your machine
 
-Judge your uncommitted work before anyone else sees it:
+Check your own work before you open a pull request:
 
 ```bash
 npx guard-my-design-system@latest
@@ -95,62 +143,100 @@ npx guard-my-design-system@latest
 
 | Command&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | What you get |
 |---|---|
-| <code>npx&nbsp;guard-my-design-system@latest</code> | Your working tree's added lines judged against main, in the terminal |
-| <code>npx&nbsp;guard-my-design-system@latest&nbsp;&lt;path&gt;</code> | Judge a different repo than the current directory |
-| <code>...&nbsp;--base&nbsp;&lt;ref&gt;</code> | Diff against something other than main |
-| `... --strict` | Exit 1 on findings, so it slots into scripts and hooks |
+| <code>npx&nbsp;guard-my-design-system@latest</code> | The lines you have added, judged against main, in the terminal |
+| <code>npx&nbsp;guard-my-design-system@latest&nbsp;&lt;path&gt;</code> | Judge a different repository |
+| <code>...&nbsp;--base&nbsp;&lt;ref&gt;</code> | Compare against a branch other than main |
+| `... --strict` | Exit with code 1 when there are findings, for scripts and hooks |
 | `... --markdown` | The verdict as markdown, the same text the PR comment carries |
-| `... --json` | Findings as JSON on stdout, for scripts and pipelines |
-| <code>...&nbsp;--exclude&nbsp;lab/</code> | Leave folders out of the system scan (comma-separate for more). A `.roastignore` file at the repo root works too |
+| `... --json` | Findings as JSON, for scripts and pipelines |
+| <code>...&nbsp;--exclude&nbsp;lab/</code> | Keep folders out of the system scan (separate more with commas). A `.roastignore` file at the repository root works too |
+| `... --version` | The version number |
 
-Requires Node 18+ and git.
+You need Node 18 or later, and git.
+
+## Not on GitHub?
+
+The CLI works anywhere git works. Only the comment-posting Action needs
+GitHub. On GitLab, add this to `.gitlab-ci.yml`:
+
+```yaml
+guard:
+  image: node:22
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  script:
+    - git fetch origin $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
+    - npx guard-my-design-system@latest --strict --base origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME
+```
+
+On Bitbucket, add this to `bitbucket-pipelines.yml`:
+
+```yaml
+pipelines:
+  pull-requests:
+    '**':
+      - step:
+          image: node:22
+          script:
+            - git fetch origin $BITBUCKET_PR_DESTINATION_BRANCH
+            - npx guard-my-design-system@latest --strict --base origin/$BITBUCKET_PR_DESTINATION_BRANCH
+```
+
+The verdict prints in the pipeline log, and `--strict` fails the step. The
+updating PR comment works on GitHub only, for now.
 
 ## What makes the verdict trustworthy
 
 - **Only added lines are checked.** The existing codebase is never judged,
-  never counted, never mentioned. Nobody rips out a smoke alarm because it
-  criticised their old wiring.
-- **Deterministic, not AI sampling.** The same engine that powers
+  never counted, never mentioned.
+- **The results are deterministic.** The same engine that powers
   roast-my-design-system reads the diff and returns the same verdict every
-  run. No model, no sampling, no drift.
-- **Read-only, no network, no telemetry.** The scan and the diff both happen
-  locally in your CI runner or terminal. Nothing about your code leaves the
-  machine it runs on.
-- **Honest exemptions, inherited from roast.** Email and print styling must be
-  inline, so it is never flagged. Artwork files carry hex that is drawing, not
-  styling. Defining a new token is extending the system, not a sin.
-- **Findings are blunt, advice starts from intent.** Every flag names the
-  on-system value the author probably meant, so the fix takes thirty seconds
-  and no meeting.
+  time. No AI model is involved.
+- **Read-only. No network. No telemetry.** Everything runs on your machine or
+  your CI runner. Nothing about your code leaves it.
+- **Fair exemptions, shared with roast.** Some files cannot be on-system, so
+  judging them would be crying wolf. Email and print styling has to be inline,
+  because there is no cascade to inherit. An OG card or a PDF invoice is a
+  picture drawn with code. A canvas renderer draws pixels. A file that draws
+  SVG is artwork, not interface. The guard reads that list from the roast
+  engine rather than keeping its own, so the two can never drift apart and
+  give you different answers about the same file. Defining a new token is
+  extending the system, not a problem.
+- **Every finding comes with a fix.** The guard names the on-system value the
+  author probably meant, so most fixes take under a minute and no meeting.
 
 ## Honest limits
 
-Things the guard deliberately does not do, said here so they never surprise you
-in a pull request:
+Things the guard deliberately does not do, listed here so they never surprise
+you in a pull request:
 
-- **Monorepos are judged as one world.** The system is learned from the whole
-  repo, so a colour that is legitimate in `packages/ui` counts as known when it
-  appears in `apps/web`. Per-package judgement is roast's territory today.
-- **Spacing is compared within one unit.** A repo on a rem scale that receives
-  `13px` gets the flag, but "nearest existing value" never converts units:
-  claiming `0.75rem` is nearest to `13px` would be a judgement faked, not made.
-- **Taste is not judged, and tokens are a passport.** The right token in the
-  wrong place sails through, and defining a new token is never a sin. The
-  guard polices drift, not decisions: extending the system is legitimate work.
-- **On a fork's pull request, the comment cannot be posted** (GitHub hands the
-  workflow a read-only token). The guard still runs; the verdict lands in the
-  workflow log instead, with a line saying why. The same happens if the
-  workflow is missing `pull-requests: write`.
-- **Not on GitHub?** The CLI works anywhere git works: GitLab and Bitbucket CI
-  can run `npx guard-my-design-system --strict --base <target branch sha>` and
-  get the failing check. Only the comment-posting Action is GitHub-specific.
+- **Monorepos are judged as one codebase.** The guard learns the system from
+  the whole repository. A colour that is legitimate in `packages/ui` counts
+  as known when it appears in `apps/web`. For per-package scores, use roast.
+- **Spacing is compared within one unit.** If your scale uses rem and someone
+  adds `13px`, the guard flags it. But it will not claim `0.75rem` is the
+  nearest value to `13px`. Converting units would be a guess, and the guard
+  does not guess.
+- **Taste is not judged.** The right token in the wrong place passes.
+  Defining a new token is never flagged. The guard checks drift, not
+  decisions.
+- **On a pull request from a fork, the comment cannot be posted.** GitHub
+  gives the workflow a read-only token. The guard still runs, and the verdict
+  appears in the workflow log with a line explaining why. The same happens if
+  the workflow is missing `pull-requests: write`.
+- **Not on GitHub?** Covered: GitLab and Bitbucket recipes are in
+  [Not on GitHub?](#not-on-github) above.
+- **Inside `` css`…` `` templates, the line-by-line check catches colours but
+  not yet spacing, radii or shadows.** The whole-repository scan reads those
+  templates in full, so the system is still learned correctly. The
+  line-level gap will close with a future engine release.
 
 ## The family
 
 [roast-my-design-system](https://github.com/gregkozakiewicz/roast-my-design-system)
-diagnoses the whole codebase: a health score against a 34-repo benchmark, the
-receipts behind it, and the agent rules that keep AI-written UI on-system.
-guard keeps new work from adding to the pile.
+examines your whole codebase: a health score against a 34-repo benchmark, the
+evidence behind it, and the agent rules that keep AI-written UI on-system.
+The guard stops new work adding to the pile.
 
 Roast diagnoses it. Guard protects it.
 
@@ -160,7 +246,7 @@ Roast diagnoses it. Guard protects it.
 
 ## License
 
-MIT. The code is yours to fork, modify and redistribute; the copyright notice
+MIT. You may fork, modify and redistribute the code. The copyright notice
 travels with it.
 
 If you build a report, summary or audit of your own from this tool's findings,
@@ -169,7 +255,7 @@ keep one line in it: *Built with
 by Greg Kozakiewicz*.
 
 **guard-my-design-system**™ and the GK mark are trademarks of Greg Kozakiewicz.
-Forking is welcome, republishing under this name is not: see
+Forking is welcome. Republishing under this name is not. See
 [brand and attribution](https://gregkozakiewicz.github.io/guard-my-design-system/brand.html).
 
 Built and designed by <a href="https://gregkozakiewicz.com"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/gregkozakiewicz/roast-my-design-system/main/assets/gk-mark-dark.png?v=3.10.1"><img src="https://raw.githubusercontent.com/gregkozakiewicz/roast-my-design-system/main/assets/gk-mark.png?v=3.10.1" height="15" alt="GK mark"></picture> Greg Kozakiewicz</a>.
