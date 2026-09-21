@@ -1,6 +1,34 @@
 # Changelog
 
-## 1.7.0 — 22 Sep 2026
+## 1.8.0 — 22 Sep 2026
+
+The engine moves to roast 8.4.6, and the guard runs the kit check.
+
+- **A colour or a pixel size written onto a kit component.** Two new kinds,
+  `kit-colour` and `kit-px`, on a product built on MUI, Mantine, Chakra UI or
+  Ant Design. A file that imports the kit is judged by the engine's kit rule
+  and the hits on added lines are reported. A colour the theme already holds
+  is told so, with the theme file named; a colour the theme lacks is told to
+  add it there once; a pixel size is turned into the theme's spacing step, or
+  told it falls between two. The advice is the kit's own: `sx` paths on MUI,
+  props on Mantine, style props on Chakra, the theme config on Ant Design.
+  The words are the engine's, the same ones `roast_validate`, `roast_review`
+  and `--check` give for the same line.
+- **A theme colour is flagged on a kit component even though it is not
+  new.** The guard's usual rule is that only what is new to the repo counts.
+  Writing a colour the theme already holds by hand onto a component is the
+  exact mistake the kit check exists for, so it is reported, as the report
+  and the live checks do.
+- **On a kit file the kit rule speaks alone.** The generic colour rule stays
+  quiet on a file the kit rule judged, and the spacing rule skips a pixel
+  size the kit rule named, so one line is never reported twice.
+- **The theme's colours are the token set on a kit repo.** A theme colour
+  used in a stylesheet is on-system, not a new colour.
+- **The same exemptions as the report.** Theme and palette files, colour
+  tables, files that drive a chart or a map, tests, stories and fixtures are
+  not judged by the kit rule.
+
+
 
 The engine moves to roast 8.4.5.
 

@@ -59,8 +59,18 @@ it updates that same comment. It never adds more comments:
 - **A palette colour where a theme variable exists.** On a shadcn repo whose
   theme file holds the variables, `text-slate-500` in the app's own code is
   flagged and the theme file named. Off on utility-class installs.
+- **A colour or a pixel size written onto a kit component.** On a product
+  built on MUI, Mantine, Chakra UI or Ant Design, `color: '#667085'` in an
+  `sx` prop or a style object is flagged and the finding says whether the
+  theme already holds that colour, or tells you to add it there once. A
+  pixel size such as `p: '12px'` is turned into the theme's spacing step. The
+  advice is in the kit's own words: `sx` paths on MUI, props on Mantine,
+  style props on Chakra, the theme config on Ant Design.
 
-It reads the repo the way the roast report does. On a shadcn repo the
+It reads the repo the way the roast report does. On a kit repo the theme's
+colours are the token set, and a colour the theme already holds is flagged
+on a kit component all the same: writing it by hand is the exact mistake the
+check exists for. On a shadcn repo the
 installed catalogue, installed registries and kit blocks are not judged:
 `shadcn add` is not a sin. On a repo that publishes a shadcn registry only
 the published folders are judged. `!important` in an embedded widget's

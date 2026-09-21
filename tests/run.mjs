@@ -452,6 +452,49 @@ function makeKit() {
   ok(r4.findings.filter((f) => f.kind === 'palette').map((f) => f.value).join() === 'text-slate-500', 'the class outside the comment on the same line is still flagged');
 }
 
+// ---- a product built on a kit (roast 8.4.6): the kit check ----
+console.log('kit repo (MUI):');
+function makeMui() {
+  const dir = mkdtempSync(join(tmpdir(), 'guard-mui-'));
+  mkdirSync(join(dir, 'src/theme'), { recursive: true });
+  mkdirSync(join(dir, 'src/components'), { recursive: true });
+  git(dir, 'init', '-qb', 'main');
+  writeFileSync(join(dir, 'package.json'), '{ "name": "mui-app", "dependencies": { "@mui/material": "^7.3.0", "react": "19.0.0" } }\n');
+  writeFileSync(join(dir, 'src/theme/theme.ts'), "import { createTheme } from '@mui/material/styles';\nexport const theme = createTheme({ spacing: 4, palette: { primary: { main: '#3355ff' }, text: { secondary: '#667085' } } });\n");
+  for (let i = 0; i < 32; i++) {
+    writeFileSync(join(dir, `src/components/Card${i}.tsx`), `import Box from '@mui/material/Box';\nexport const Card${i} = () => <Box sx={{ color: 'text.secondary', p: 2 }}>${i}</Box>;\n`);
+  }
+  git(dir, 'add', '-A');
+  git(dir, 'commit', '-qm', 'base');
+  return dir;
+}
+{
+  const dir = makeMui();
+  writeFileSync(join(dir, 'src/components/New.tsx'), "import Box from '@mui/material/Box';\nexport const New = () => (\n  <Box sx={{ color: '#667085' }}>\n    <Box sx={{ bgcolor: '#ff0000', p: '12px' }} />\n  </Box>\n);\n");
+  const r = run(dir);
+  const kinds = r.findings.map((f) => f.kind).sort().join(',');
+  ok(kinds === 'kit-colour,kit-colour,kit-px', `a colour or a pixel size on a kit component is a kit finding, and nothing else says it (${kinds})`);
+  const held = r.findings.find((f) => f.value === '#667085');
+  ok(held?.line === 3 && held.advice.startsWith('the theme already holds it (src/theme/theme.ts)') && held.advice.includes("color: 'text.secondary' in sx"), 'a theme colour is told the theme already holds it, in the kit\'s words');
+  const missing = r.findings.find((f) => f.value === '#ff0000');
+  ok(missing?.line === 4 && missing.advice.startsWith('the theme has no such colour. Add it to the theme once (src/theme/theme.ts)'), 'a colour the theme lacks is told to add it once');
+  const px = r.findings.find((f) => f.kind === 'kit-px');
+  ok(px?.value === 'p: 12px' && px.advice.includes('write p: 3 in sx'), 'a pixel size becomes a spacing step on this theme');
+  ok(r.findings.every((f) => f.label?.includes('an MUI component')), 'the label names the kit');
+  const text = execFileSync('node', [CLI, dir, '--base', 'HEAD'], { encoding: 'utf8' });
+  ok(text.includes('colour written onto an MUI component #667085. The theme already holds it'), 'the terminal line reads as agreed');
+  // a file that does not import the kit is judged by the generic rules
+  writeFileSync(join(dir, 'src/components/Plain.tsx'), 'export const Plain = () => <div style={{ color: "#ff0000" }} />;\n');
+  const r2 = run(dir);
+  ok(r2.findings.some((f) => f.kind === 'color' && f.file.endsWith('Plain.tsx')), 'a colour off the kit is still a new colour');
+  ok(!r2.findings.some((f) => f.kind === 'color' && f.file.endsWith('New.tsx')), 'a kit file is not reported twice for the same colour');
+  // a theme colour used in a stylesheet is on-system on a kit repo
+  writeFileSync(join(dir, 'src/site.css'), '.x { color: #667085; }\n');
+  const r3 = run(dir);
+  ok(!r3.findings.some((f) => f.file.endsWith('site.css')), 'the theme\'s colours are the token set on a kit repo');
+  rmSync(dir, { recursive: true, force: true });
+}
+
 console.log('!important as the medium:');
 {
   const dir = makeRepo();

@@ -12,7 +12,7 @@ import {
   isCodeFile, isStyleFile, typefaceOf, GENERIC_FONTS,
   definedComponents, exemptReason,
   EXTRA_KINDS, extraValue, fontDeclarations,
-  WIDGET_CSS_RE, isLibraryClass, PALETTE_CLASS_RE, blankComments,
+  WIDGET_CSS_RE, isLibraryClass, PALETTE_CLASS_RE, blankComments, kitPaintFindings,
 } from 'roast-my-design-system/engine';
 
 // Folder membership, the way the engine's own splits do it.
@@ -185,6 +185,35 @@ export function judge(added, system, { readFile } = {}) {
     }
   }
 
+  // A product built on a kit (MUI, Mantine, Chakra UI, Ant Design), roast
+  // 8.4.6: a colour or a pixel size written onto a kit component where the
+  // theme has a value. The engine judges the whole file (the import that makes
+  // it a kit file sits at the top, where the diff never looks) and the guard
+  // keeps the hits on added lines. On a kit file the kit rule owns colours
+  // and the pixel sizes it named, so the generic rules stay quiet about the
+  // same value: one line, one finding, the same words as the roast report's
+  // live checks.
+  const kit = prof.kit ?? null;
+  const kitJudged = new Map();
+  const kitLines = (file) => {
+    if (!kit) return null;
+    if (!kitJudged.has(file)) {
+      const w = wholeText(file);
+      const j = w == null ? null : kitPaintFindings(w, kit, { file });
+      if (!j || j.exempt) kitJudged.set(file, null);
+      else {
+        const byLine = new Map();
+        for (const f of j.findings) {
+          const ln = w.slice(0, f.index).split('\n').length;
+          if (!byLine.has(ln)) byLine.set(ln, []);
+          byLine.get(ln).push(f);
+        }
+        kitJudged.set(file, byLine);
+      }
+    }
+    return kitJudged.get(file);
+  };
+
   const findings = [];
 
   for (const { file, line, text } of added) {
@@ -194,7 +223,18 @@ export function judge(added, system, { readFile } = {}) {
 
     const seen = extractStyling(text, { css });
 
+    const onKit = css ? null : kitLines(file);
+    const kitPx = new Set();
+    for (const f of onKit?.get(line) ?? []) {
+      if (f.rule === 'kit-px') kitPx.add(f.value.split(': ')[1]);
+      findings.push({
+        file, line, kind: f.rule, value: f.value, label: f.label,
+        advice: f.note ? `${f.note}. ${f.fix.replace(/\.$/, '')}` : f.fix.replace(/\.$/, ''),
+      });
+    }
+
     for (const c of seen.colors) {
+      if (onKit) break; // the kit rule owns colours on a kit file
       if (tokenSet.has(c.value)) continue; // disciplined token use
       const near = c.value.startsWith('#') ? nearestColor(c.value, system.tokens) : null;
       findings.push({
@@ -208,6 +248,7 @@ export function judge(added, system, { readFile } = {}) {
     }
 
     for (const s of seen.spacing) {
+      if (kitPx.has(s.value)) continue; // the kit rule said it
       if (knownLengths.has(s.value)) continue; // the codebase already uses it
       const near = nearestLength(s.value, [...knownLengths]);
       findings.push({
