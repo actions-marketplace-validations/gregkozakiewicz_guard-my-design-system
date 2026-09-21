@@ -1,6 +1,29 @@
 # Changelog
 
-## 1.6.0 — 14 Sep 2026
+## 1.7.0 — 22 Sep 2026
+
+The engine moves to roast 8.4.5.
+
+- **A palette class named in a comment is not flagged.** The palette rule
+  matched the raw added line, so a note such as `{/* border-green-500 is
+  deliberate */}` was reported as paint. The line is now read with its
+  comments blanked, the same step the roast report and its live checks run
+  since 8.4.4, taken from the engine rather than copied. A block comment
+  opened on an earlier line counts as a comment too.
+- **The palette advice says token.** It read "a theme variable covers this;
+  use a semantic class". It now reads "a theme token covers this; use it as
+  the class (`bg-primary`, `text-muted-foreground`), or add one to the theme
+  once", the wording the rest of the family uses.
+- **The system is learned by the 8.4.5 engine.** Between 7.8.0 and 8.4.5 the
+  engine fixed how it counts colours (one colour written two ways is one
+  colour) and reads colour tokens stored as red, green and blue channels. The
+  guard's nearest-token advice comes from that reading, so it can name a
+  different value from 1.6.0, and the same value as the roast report. The
+  engine also recognises MUI, Mantine, Chakra UI, Ant Design and Tailwind
+  theme repos; the guard does not yet run the kit check the report and the
+  live checks run on them, and reads those repos as before.
+
+
 
 The engine moves to roast 7.8.0, and the guard reads the repo the way the
 report does: four profiles, installed code, registries, and two cases where

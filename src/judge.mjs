@@ -12,7 +12,7 @@ import {
   isCodeFile, isStyleFile, typefaceOf, GENERIC_FONTS,
   definedComponents, exemptReason,
   EXTRA_KINDS, extraValue, fontDeclarations,
-  WIDGET_CSS_RE, isLibraryClass, PALETTE_CLASS_RE,
+  WIDGET_CSS_RE, isLibraryClass, PALETTE_CLASS_RE, blankComments,
 } from 'roast-my-design-system/engine';
 
 // Folder membership, the way the engine's own splits do it.
@@ -106,6 +106,20 @@ export function judge(added, system, { readFile } = {}) {
   };
   const isWidgetFile = (file) => underAny(file, prof.widgetDirs) || WIDGET_CSS_RE.test(wholeText(file) ?? '');
   const paletteRe = new RegExp(PALETTE_CLASS_RE.source, 'g');
+  // The added line with its comments blanked, the way the report and the
+  // live checks read a file before matching (roast 8.4.4): a class named in
+  // a comment paints nothing. Blanked from the whole file when it is at hand,
+  // so a block comment opened on an earlier line still counts as a comment.
+  const blanked = new Map();
+  const codeText = (file, lineNo, text) => {
+    const w = wholeText(file);
+    if (w == null) return blankComments(text);
+    if (!blanked.has(file)) blanked.set(file, blankComments(w).split('\n'));
+    // blanking keeps every character's place, so the file's line is the
+    // diff's line only if the lengths match; otherwise the file has moved on
+    const l = blanked.get(file)[lineNo - 1];
+    return l != null && l.length === text.length ? l : blankComments(text);
+  };
 
   // The system was learned from the tree that already CONTAINS these added
   // lines, so a new value would vouch for itself. A value is only "known"
@@ -282,10 +296,10 @@ export function judge(added, system, { readFile } = {}) {
     // CSS-variable mode): paint from a tin. The same pattern the report
     // counts per 100 files; here, per added line.
     if (!css && prof.paletteReady) {
-      for (const m of text.matchAll(paletteRe)) {
+      for (const m of codeText(file, line, text).matchAll(paletteRe)) {
         findings.push({
           file, line, kind: 'palette', value: m[0],
-          advice: `a theme variable covers this; use a semantic class such as bg-primary or text-muted-foreground, or add a variable${prof.sheetFile ? ` to ${prof.sheetFile}` : ''}`,
+          advice: `a theme token covers this; use it as the class (bg-primary, text-muted-foreground), or add one${prof.sheetFile ? ` to ${prof.sheetFile}` : ' to the theme'} once`,
         });
       }
     }

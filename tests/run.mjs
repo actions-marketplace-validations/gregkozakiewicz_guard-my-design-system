@@ -442,6 +442,14 @@ function makeKit() {
   ok(palette.length === 2, `palette classes in own code are flagged where a theme variable exists (got ${palette.length})`);
   ok(palette[0]?.advice.includes('app/globals.css'), 'the advice names the theme file');
   ok(r2.findings.every((f) => !f.file.includes('components/ui/')), 'nothing inside the catalogue is judged');
+  // a palette class named in a comment paints nothing (roast 8.4.4), whether
+  // the comment sits on the line or opened on the line above
+  writeFileSync(join(dir, 'app/page.tsx'), 'export default function Page() {\n  /* the old\n     bg-blue-500 look */\n  return <main className="p-6">{/* text-slate-500 is gone */}hi</main>; // ring-green-500\n}\n');
+  const r3 = run(dir);
+  ok(r3.findings.filter((f) => f.kind === 'palette').length === 0, `a palette class named in a comment is not flagged (got ${r3.findings.filter((f) => f.kind === 'palette').map((f) => f.value).join(', ') || 'none'})`);
+  writeFileSync(join(dir, 'app/page.tsx'), 'export default function Page() {\n  return <main className="p-6 text-slate-500">{/* bg-blue-500 */}hi</main>;\n}\n');
+  const r4 = run(dir);
+  ok(r4.findings.filter((f) => f.kind === 'palette').map((f) => f.value).join() === 'text-slate-500', 'the class outside the comment on the same line is still flagged');
 }
 
 console.log('!important as the medium:');
