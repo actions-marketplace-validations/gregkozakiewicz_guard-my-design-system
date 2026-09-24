@@ -534,5 +534,48 @@ console.log('registry: judged on what it publishes:');
   ok(r2.findings.some((f) => f.file.includes('registry/ui/pill.tsx')), 'a published component is judged as the project\'s own work');
 }
 
+console.log('roast 8.6: twin tokens and imports of the copy to avoid:');
+{
+  const dir = mkdtempSync(join(tmpdir(), 'guard-twins-'));
+  for (const d of ['src/styles', 'src/ui', 'src/features/invoices', 'src/layout']) mkdirSync(join(dir, d), { recursive: true });
+  git(dir, 'init', '-qb', 'main');
+  writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'ledgerly', private: true, dependencies: { react: '^19.0.0', tailwindcss: '^4.1.0' } }) + '\n');
+  const theme = (extraLight, extraDark) => '@import "tailwindcss";\n@theme {\n  --color-surface: #ffffff;\n  --color-ink: #101828;\n'
+    + '  --color-brand: #3b5bdb;\n  --color-warning: #b25e09;\n  --color-warning-soft: #fdf5e6;\n  --color-negative-soft: #fcefeb;\n'
+    + extraLight + '}\n\n.dark {\n  --color-brand: #6d8bff;\n  --color-warning-soft: #2b2112;\n' + extraDark + '}\n';
+  writeFileSync(join(dir, 'src/styles/tokens.css'), theme('', ''));
+  writeFileSync(join(dir, 'src/ui/Button.tsx'), 'export function Button(p) { return <button className="bg-brand text-surface" {...p} />; }\n');
+  writeFileSync(join(dir, 'src/features/invoices/ButtonV2.tsx'), 'export function Button(p) { return <button className="bg-[#3d5ce0] text-white" {...p} />; }\n');
+  const uses = (n) => Array.from({ length: n }, () => '<Button />').join('');
+  writeFileSync(join(dir, 'src/layout/TopBar.tsx'), `import { Button } from '../ui/Button';\nexport function TopBar() { return <div className="bg-surface">${uses(8)}</div>; }\n`);
+  writeFileSync(join(dir, 'src/features/invoices/InvoiceDetail.tsx'), `import { Button } from './ButtonV2';\nexport function InvoiceDetail() { return <div className="text-ink">${uses(4)}</div>; }\n`);
+  writeFileSync(join(dir, 'src/features/invoices/InvoicesPage.tsx'), "import { Button } from '../../ui/Button';\nexport function InvoicesPage() { return <div className=\"bg-surface\"><Button /></div>; }\n");
+  git(dir, 'add', '-A');
+  git(dir, 'commit', '-qm', 'base');
+
+  // the "match the spec exactly" change: three tokens that copy existing ones,
+  // one that copies nothing, and an import of the copy to avoid
+  writeFileSync(join(dir, 'src/styles/tokens.css'), theme(
+    '  --color-overdue-soft: #fff4e5;\n  --color-overdue-title: #8a4b08;\n  --color-overdue-action: #3d5ce0;\n',
+    '  --color-overdue-soft: #2b1d0c;\n  --color-overdue-action: #6d8bff;\n'));
+  writeFileSync(join(dir, 'src/features/invoices/InvoicesPage.tsx'), "import { Button } from '../../ui/Button';\nimport { Button as ButtonV2 } from './ButtonV2';\nexport function InvoicesPage() { return <div className=\"bg-surface\"><Button /><ButtonV2 /></div>; }\n");
+  // an edit to a file that already imported the copy: not this change's
+  writeFileSync(join(dir, 'src/features/invoices/InvoiceDetail.tsx'), `import { Button } from './ButtonV2';\nexport function InvoiceDetail() { return <div className="text-ink bg-surface">${uses(4)}</div>; }\n`);
+
+  const r = run(dir);
+  const twins = r.findings.filter((f) => f.kind === 'twin-token');
+  ok(twins.length === 2, `two new tokens copy an existing one (got ${twins.length}: ${twins.map((f) => f.value).join(', ')})`);
+  ok(twins.some((f) => f.value === '--color-overdue-soft' && /twin of the existing --color-warning-soft \(#fdf5e6\)/.test(f.advice)), 'the copied token names the one it copies');
+  ok(twins.some((f) => f.value === '--color-overdue-action' && /the same dark value \(#6d8bff\)/.test(f.advice)), 'a shared dark value is said');
+  ok(!twins.some((f) => f.value === '--color-overdue-title'), 'a token that copies nothing is left alone');
+  ok(!r.findings.some((f) => /negative-soft|warning-soft/.test(f.value)), 'the tokens already there are not judged');
+  const imp = r.findings.filter((f) => f.kind === 'avoided-copy');
+  ok(imp.length === 1 && imp[0].file === 'src/features/invoices/InvoicesPage.tsx' && imp[0].line === 2, `the new import of the copy is flagged on its line (got ${imp.map((f) => `${f.file}:${f.line}`).join(', ')})`);
+  ok(/The canonical one is src\/ui\/Button\.tsx/.test(imp[0]?.advice ?? ''), 'the import names the canonical copy');
+  ok(/This copy hard-codes #3d5ce0/.test(imp[0]?.advice ?? ''), 'the colour hidden in the copy is named');
+  const md = execFileSync('node', [CLI, dir, '--base', 'HEAD', '--markdown'], { encoding: 'utf8' });
+  ok(md.includes('token that copies an existing one. --color-overdue-soft'), 'the PR comment words it once, without repeating the name');
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

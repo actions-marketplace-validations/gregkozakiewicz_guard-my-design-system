@@ -13,6 +13,7 @@ import {
   definedComponents, exemptReason,
   EXTRA_KINDS, extraValue, fontDeclarations,
   WIDGET_CSS_RE, isLibraryClass, PALETTE_CLASS_RE, blankComments, kitPaintFindings,
+  tokenTwinFindings, avoidedImportFindings,
 } from 'roast-my-design-system/engine';
 
 // Folder membership, the way the engine's own splits do it.
@@ -86,9 +87,13 @@ function exemptFiles(added, readFile) {
  * Judge added lines against the learned system.
  * Returns [{ file, line, kind, value, advice }] sorted by file then line.
  * kinds: color | spacing | radius | fontsize | shadow | arbitrary |
- *        important | font | inline | component
+ *        important | font | inline | component | palette | kit-colour |
+ *        kit-px | twin-token | avoided-copy
+ * readFile(file) gives the file as it stands; readBase(file) the file at the
+ * base (null when the change creates it), so a token or an import the change
+ * adds can be told from one that was already there.
  */
-export function judge(added, system, { readFile } = {}) {
+export function judge(added, system, { readFile, readBase } = {}) {
   const tokenSet = new Set(system.tokens);
   // How the repo was read, from the engine's own profiles (roast 7.8):
   // installed code is not the change's sin, a registry is judged on what it
@@ -360,6 +365,44 @@ export function judge(added, system, { readFile } = {}) {
           });
         }
       }
+    }
+  }
+
+  // Two checks that read the whole file against its base, roast 8.6: a new
+  // colour token that copies one the system already has, and a new import of
+  // the duplicate the canonical copy replaces. The engine words both, the
+  // same words roast_validate, roast_review and --check give; the guard keeps
+  // the hits on added lines.
+  const addedAt = new Map();
+  for (const { file, line } of added) {
+    if (!addedAt.has(file)) addedAt.set(file, new Set());
+    addedAt.get(file).add(line);
+  }
+  const baseText = (file) => {
+    if (!readBase) return undefined;
+    try { return readBase(file); } catch { return undefined; }
+  };
+  const lineAt = (text, index) => text.slice(0, index).split('\n').length;
+  for (const [file, lines] of addedAt) {
+    if (exempt(file) || outOfScope(file)) continue;
+    const css = isStyleFile(file);
+    if (!css && !isCodeFile(file)) continue;
+    const w = wholeText(file);
+    if (w == null) continue;
+    const hits = css
+      ? (system.tokenDefs && w.includes('--') ? tokenTwinFindings(w, {
+          before: baseText(file),
+          others: system.tokenDefs.filter((d) => !samePath(d.file, file)),
+          tailwind: prof.kind === 'tailwind' || /@theme\b/.test(w),
+        }) : [])
+      : (system.duplicates ? avoidedImportFindings(w, { file, before: baseText(file), dupes: system.duplicates }) : []);
+    for (const f of hits) {
+      const line = lineAt(w, f.index);
+      if (!lines.has(line)) continue;
+      findings.push({
+        file, line, kind: f.rule, value: f.name,
+        advice: `${f.message} ${f.fix.replace(/\.$/, '')}`,
+      });
     }
   }
 

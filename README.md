@@ -56,6 +56,17 @@ it updates that same comment. It never adds more comments:
   are decided elsewhere, so they are left alone.
 - **A second definition of a component you already have.** The finding names
   the file that already defines it, and how many places use that one.
+- **A new import of a duplicate component.** When a name is defined in more
+  than one file and one copy is clearly the main one, importing another copy
+  is flagged. The finding names the main copy, how often each is used, and
+  the colours the other copy hard-codes. If two copies are used about
+  equally, nothing is flagged.
+- **A new colour token that copies an existing one.** A token added to a
+  stylesheet whose value is almost the same as a token the system already
+  has, or whose dark value is exactly the same, is flagged with the existing
+  token named: `--color-overdue-soft (#fff4e5) is a twin of the existing
+  --color-warning-soft (#fdf5e6)`. Numbered steps such as `gray-100` and
+  shadcn's own theme variables are never compared.
 - **A palette colour where a theme variable exists.** On a shadcn repo whose
   theme file holds the variables, `text-slate-500` in the app's own code is
   flagged and the theme file named. Off on utility-class installs.

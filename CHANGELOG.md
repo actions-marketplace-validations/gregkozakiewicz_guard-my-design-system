@@ -1,5 +1,30 @@
 # Changelog
 
+## 1.9.0 — 24 Sep 2026
+
+The engine moves to roast 8.6.1, and the guard runs the two checks added in
+roast 8.6.0.
+
+- **A new colour token that copies an existing one.** A new kind,
+  `twin-token`. When a change adds a colour token to a stylesheet and its
+  value is almost the same as a token the system already has, the guard says
+  so and names the existing token. Almost the same means every colour channel
+  within 8 steps and a difference too small to see. A new token whose dark
+  value is exactly the same as an existing token's dark value is flagged
+  too, if the light values are within 24 steps. Numbered steps such as
+  `gray-100`, shadcn's own theme variables, and two names that start with
+  the same word (`brand` and `brand-strong`) are never compared. Only tokens
+  that were not in the file at the base are judged.
+- **A new import of a duplicate component.** A new kind, `avoided-copy`.
+  When a change imports a component from a copy that is not the main one,
+  the guard names the main copy, how often each copy is used, and the
+  colours the other copy hard-codes. The main copy must be used at least one
+  and a half times as often as the next; otherwise nothing is flagged. An
+  import that was already in the file at the base is not flagged.
+- **The words are the engine's.** Both findings use the same sentences as
+  `roast_validate`, `roast_review` and `--check`, taken from the engine
+  rather than copied.
+
 ## 1.8.0 — 22 Sep 2026
 
 The engine moves to roast 8.4.6, and the guard runs the kit check.
