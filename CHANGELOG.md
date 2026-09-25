@@ -1,5 +1,33 @@
 # Changelog
 
+## 2.0.0 — 25 Sep 2026
+
+The engine moves to roast 9.0.0. A major because the engine's own major
+changed what a spacing value is, so findings on the same change can differ
+from 1.9: fewer, never more of the old kind, plus one new kind.
+
+- **A shadow's offsets, a width and a font size are no longer "new spacing
+  values".** Inside a style object every length used to count as spacing
+  (roast counted them that way too, up to 8.9.1). Only padding, margin, gap
+  and position count now, the same set the CSS rule reads. A change that
+  adds `boxShadow: '0 3px 9px …'` is no longer told it added two spacing
+  values.
+- **The chart rule.** Two new kinds, in the engine's own words. `chart-colour`:
+  a colour written by hand in a chart file where the repo keeps a chart
+  palette (`--chart-*` or `--series-*` tokens, a `chartColors` entry in a
+  theme file, or shadcn's `--chart-1` to `--chart-5` when a chart actually
+  reads them); the finding names the palette and how to read it.
+  `chart-palette`: a chart painting its series by hand in a repo with no
+  palette; one line per file that names the existing chart doing the same
+  and asks for the palette once, or, for the first chart, asks for a name.
+  A chart file is one that imports a chart library or is named for a
+  chart; icons, illustrations and stories are not. On a chart file the
+  chart rule owns colours: the generic colour rule and the kit rule stay
+  out, so one line gets one finding, the same as `roast_validate`,
+  `roast_review`, `--check` and the edit hook.
+- **The Action tag is `v2`.** Workflows that reference `@v1` keep the 1.9
+  engine; move to `@v2` (or a commit) to get this release.
+
 ## 1.9.0 — 24 Sep 2026
 
 The engine moves to roast 8.6.1, and the guard runs the two checks added in
