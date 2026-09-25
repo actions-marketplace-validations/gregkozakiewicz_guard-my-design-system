@@ -1,6 +1,82 @@
 # Changelog
 
-## 1.6.0 — 14 Sep 2026
+## 1.9.0 — 24 Sep 2026
+
+The engine moves to roast 8.6.1, and the guard runs the two checks added in
+roast 8.6.0.
+
+- **A new colour token that copies an existing one.** A new kind,
+  `twin-token`. When a change adds a colour token to a stylesheet and its
+  value is almost the same as a token the system already has, the guard says
+  so and names the existing token. Almost the same means every colour channel
+  within 8 steps and a difference too small to see. A new token whose dark
+  value is exactly the same as an existing token's dark value is flagged
+  too, if the light values are within 24 steps. Numbered steps such as
+  `gray-100`, shadcn's own theme variables, and two names that start with
+  the same word (`brand` and `brand-strong`) are never compared. Only tokens
+  that were not in the file at the base are judged.
+- **A new import of a duplicate component.** A new kind, `avoided-copy`.
+  When a change imports a component from a copy that is not the main one,
+  the guard names the main copy, how often each copy is used, and the
+  colours the other copy hard-codes. The main copy must be used at least one
+  and a half times as often as the next; otherwise nothing is flagged. An
+  import that was already in the file at the base is not flagged.
+- **The words are the engine's.** Both findings use the same sentences as
+  `roast_validate`, `roast_review` and `--check`, taken from the engine
+  rather than copied.
+
+## 1.8.0 — 22 Sep 2026
+
+The engine moves to roast 8.4.6, and the guard runs the kit check.
+
+- **A colour or a pixel size written onto a kit component.** Two new kinds,
+  `kit-colour` and `kit-px`, on a product built on MUI, Mantine, Chakra UI or
+  Ant Design. A file that imports the kit is judged by the engine's kit rule
+  and the hits on added lines are reported. A colour the theme already holds
+  is told so, with the theme file named; a colour the theme lacks is told to
+  add it there once; a pixel size is turned into the theme's spacing step, or
+  told it falls between two. The advice is the kit's own: `sx` paths on MUI,
+  props on Mantine, style props on Chakra, the theme config on Ant Design.
+  The words are the engine's, the same ones `roast_validate`, `roast_review`
+  and `--check` give for the same line.
+- **A theme colour is flagged on a kit component even though it is not
+  new.** The guard's usual rule is that only what is new to the repo counts.
+  Writing a colour the theme already holds by hand onto a component is the
+  exact mistake the kit check exists for, so it is reported, as the report
+  and the live checks do.
+- **On a kit file the kit rule speaks alone.** The generic colour rule stays
+  quiet on a file the kit rule judged, and the spacing rule skips a pixel
+  size the kit rule named, so one line is never reported twice.
+- **The theme's colours are the token set on a kit repo.** A theme colour
+  used in a stylesheet is on-system, not a new colour.
+- **The same exemptions as the report.** Theme and palette files, colour
+  tables, files that drive a chart or a map, tests, stories and fixtures are
+  not judged by the kit rule.
+
+
+
+The engine moves to roast 8.4.5.
+
+- **A palette class named in a comment is not flagged.** The palette rule
+  matched the raw added line, so a note such as `{/* border-green-500 is
+  deliberate */}` was reported as paint. The line is now read with its
+  comments blanked, the same step the roast report and its live checks run
+  since 8.4.4, taken from the engine rather than copied. A block comment
+  opened on an earlier line counts as a comment too.
+- **The palette advice says token.** It read "a theme variable covers this;
+  use a semantic class". It now reads "a theme token covers this; use it as
+  the class (`bg-primary`, `text-muted-foreground`), or add one to the theme
+  once", the wording the rest of the family uses.
+- **The system is learned by the 8.4.5 engine.** Between 7.8.0 and 8.4.5 the
+  engine fixed how it counts colours (one colour written two ways is one
+  colour) and reads colour tokens stored as red, green and blue channels. The
+  guard's nearest-token advice comes from that reading, so it can name a
+  different value from 1.6.0, and the same value as the roast report. The
+  engine also recognises MUI, Mantine, Chakra UI, Ant Design and Tailwind
+  theme repos; the guard does not yet run the kit check the report and the
+  live checks run on them, and reads those repos as before.
+
+
 
 The engine moves to roast 7.8.0, and the guard reads the repo the way the
 report does: four profiles, installed code, registries, and two cases where

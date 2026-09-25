@@ -81,7 +81,14 @@ const readWhole = (file) => {
   }
   return wholeFile.get(file);
 };
-let findings = judge(judged, system, { readFile: readWhole });
+// The file at the base, so a token or an import already there before this
+// change is not reported as new. null: the change creates the file.
+const readBase = (file) => {
+  try {
+    return execFileSync('git', ['show', `${base}:${file}`], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 16 * 1024 * 1024 });
+  } catch { return null; }
+};
+let findings = judge(judged, system, { readFile: readWhole, readBase });
 
 // The escape hatch: a `guard-ignore-next-line` comment silences every finding
 // on the line below it. Checked against the file as it stands (not just the

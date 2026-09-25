@@ -442,6 +442,57 @@ function makeKit() {
   ok(palette.length === 2, `palette classes in own code are flagged where a theme variable exists (got ${palette.length})`);
   ok(palette[0]?.advice.includes('app/globals.css'), 'the advice names the theme file');
   ok(r2.findings.every((f) => !f.file.includes('components/ui/')), 'nothing inside the catalogue is judged');
+  // a palette class named in a comment paints nothing (roast 8.4.4), whether
+  // the comment sits on the line or opened on the line above
+  writeFileSync(join(dir, 'app/page.tsx'), 'export default function Page() {\n  /* the old\n     bg-blue-500 look */\n  return <main className="p-6">{/* text-slate-500 is gone */}hi</main>; // ring-green-500\n}\n');
+  const r3 = run(dir);
+  ok(r3.findings.filter((f) => f.kind === 'palette').length === 0, `a palette class named in a comment is not flagged (got ${r3.findings.filter((f) => f.kind === 'palette').map((f) => f.value).join(', ') || 'none'})`);
+  writeFileSync(join(dir, 'app/page.tsx'), 'export default function Page() {\n  return <main className="p-6 text-slate-500">{/* bg-blue-500 */}hi</main>;\n}\n');
+  const r4 = run(dir);
+  ok(r4.findings.filter((f) => f.kind === 'palette').map((f) => f.value).join() === 'text-slate-500', 'the class outside the comment on the same line is still flagged');
+}
+
+// ---- a product built on a kit (roast 8.4.6): the kit check ----
+console.log('kit repo (MUI):');
+function makeMui() {
+  const dir = mkdtempSync(join(tmpdir(), 'guard-mui-'));
+  mkdirSync(join(dir, 'src/theme'), { recursive: true });
+  mkdirSync(join(dir, 'src/components'), { recursive: true });
+  git(dir, 'init', '-qb', 'main');
+  writeFileSync(join(dir, 'package.json'), '{ "name": "mui-app", "dependencies": { "@mui/material": "^7.3.0", "react": "19.0.0" } }\n');
+  writeFileSync(join(dir, 'src/theme/theme.ts'), "import { createTheme } from '@mui/material/styles';\nexport const theme = createTheme({ spacing: 4, palette: { primary: { main: '#3355ff' }, text: { secondary: '#667085' } } });\n");
+  for (let i = 0; i < 32; i++) {
+    writeFileSync(join(dir, `src/components/Card${i}.tsx`), `import Box from '@mui/material/Box';\nexport const Card${i} = () => <Box sx={{ color: 'text.secondary', p: 2 }}>${i}</Box>;\n`);
+  }
+  git(dir, 'add', '-A');
+  git(dir, 'commit', '-qm', 'base');
+  return dir;
+}
+{
+  const dir = makeMui();
+  writeFileSync(join(dir, 'src/components/New.tsx'), "import Box from '@mui/material/Box';\nexport const New = () => (\n  <Box sx={{ color: '#667085' }}>\n    <Box sx={{ bgcolor: '#ff0000', p: '12px' }} />\n  </Box>\n);\n");
+  const r = run(dir);
+  const kinds = r.findings.map((f) => f.kind).sort().join(',');
+  ok(kinds === 'kit-colour,kit-colour,kit-px', `a colour or a pixel size on a kit component is a kit finding, and nothing else says it (${kinds})`);
+  const held = r.findings.find((f) => f.value === '#667085');
+  ok(held?.line === 3 && held.advice.startsWith('the theme already holds it (src/theme/theme.ts)') && held.advice.includes("color: 'text.secondary' in sx"), 'a theme colour is told the theme already holds it, in the kit\'s words');
+  const missing = r.findings.find((f) => f.value === '#ff0000');
+  ok(missing?.line === 4 && missing.advice.startsWith('the theme has no such colour. Add it to the theme once (src/theme/theme.ts)'), 'a colour the theme lacks is told to add it once');
+  const px = r.findings.find((f) => f.kind === 'kit-px');
+  ok(px?.value === 'p: 12px' && px.advice.includes('write p: 3 in sx'), 'a pixel size becomes a spacing step on this theme');
+  ok(r.findings.every((f) => f.label?.includes('an MUI component')), 'the label names the kit');
+  const text = execFileSync('node', [CLI, dir, '--base', 'HEAD'], { encoding: 'utf8' });
+  ok(text.includes('colour written onto an MUI component #667085. The theme already holds it'), 'the terminal line reads as agreed');
+  // a file that does not import the kit is judged by the generic rules
+  writeFileSync(join(dir, 'src/components/Plain.tsx'), 'export const Plain = () => <div style={{ color: "#ff0000" }} />;\n');
+  const r2 = run(dir);
+  ok(r2.findings.some((f) => f.kind === 'color' && f.file.endsWith('Plain.tsx')), 'a colour off the kit is still a new colour');
+  ok(!r2.findings.some((f) => f.kind === 'color' && f.file.endsWith('New.tsx')), 'a kit file is not reported twice for the same colour');
+  // a theme colour used in a stylesheet is on-system on a kit repo
+  writeFileSync(join(dir, 'src/site.css'), '.x { color: #667085; }\n');
+  const r3 = run(dir);
+  ok(!r3.findings.some((f) => f.file.endsWith('site.css')), 'the theme\'s colours are the token set on a kit repo');
+  rmSync(dir, { recursive: true, force: true });
 }
 
 console.log('!important as the medium:');
@@ -481,6 +532,49 @@ console.log('registry: judged on what it publishes:');
   writeFileSync(join(dir, 'registry/ui/pill.tsx'), 'export function Pill(p) { return <span className="rounded-md" style={{ color: "#ff6600" }} {...p} />; }\n');
   const r2 = run(dir);
   ok(r2.findings.some((f) => f.file.includes('registry/ui/pill.tsx')), 'a published component is judged as the project\'s own work');
+}
+
+console.log('roast 8.6: twin tokens and imports of the copy to avoid:');
+{
+  const dir = mkdtempSync(join(tmpdir(), 'guard-twins-'));
+  for (const d of ['src/styles', 'src/ui', 'src/features/invoices', 'src/layout']) mkdirSync(join(dir, d), { recursive: true });
+  git(dir, 'init', '-qb', 'main');
+  writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'ledgerly', private: true, dependencies: { react: '^19.0.0', tailwindcss: '^4.1.0' } }) + '\n');
+  const theme = (extraLight, extraDark) => '@import "tailwindcss";\n@theme {\n  --color-surface: #ffffff;\n  --color-ink: #101828;\n'
+    + '  --color-brand: #3b5bdb;\n  --color-warning: #b25e09;\n  --color-warning-soft: #fdf5e6;\n  --color-negative-soft: #fcefeb;\n'
+    + extraLight + '}\n\n.dark {\n  --color-brand: #6d8bff;\n  --color-warning-soft: #2b2112;\n' + extraDark + '}\n';
+  writeFileSync(join(dir, 'src/styles/tokens.css'), theme('', ''));
+  writeFileSync(join(dir, 'src/ui/Button.tsx'), 'export function Button(p) { return <button className="bg-brand text-surface" {...p} />; }\n');
+  writeFileSync(join(dir, 'src/features/invoices/ButtonV2.tsx'), 'export function Button(p) { return <button className="bg-[#3d5ce0] text-white" {...p} />; }\n');
+  const uses = (n) => Array.from({ length: n }, () => '<Button />').join('');
+  writeFileSync(join(dir, 'src/layout/TopBar.tsx'), `import { Button } from '../ui/Button';\nexport function TopBar() { return <div className="bg-surface">${uses(8)}</div>; }\n`);
+  writeFileSync(join(dir, 'src/features/invoices/InvoiceDetail.tsx'), `import { Button } from './ButtonV2';\nexport function InvoiceDetail() { return <div className="text-ink">${uses(4)}</div>; }\n`);
+  writeFileSync(join(dir, 'src/features/invoices/InvoicesPage.tsx'), "import { Button } from '../../ui/Button';\nexport function InvoicesPage() { return <div className=\"bg-surface\"><Button /></div>; }\n");
+  git(dir, 'add', '-A');
+  git(dir, 'commit', '-qm', 'base');
+
+  // the "match the spec exactly" change: three tokens that copy existing ones,
+  // one that copies nothing, and an import of the copy to avoid
+  writeFileSync(join(dir, 'src/styles/tokens.css'), theme(
+    '  --color-overdue-soft: #fff4e5;\n  --color-overdue-title: #8a4b08;\n  --color-overdue-action: #3d5ce0;\n',
+    '  --color-overdue-soft: #2b1d0c;\n  --color-overdue-action: #6d8bff;\n'));
+  writeFileSync(join(dir, 'src/features/invoices/InvoicesPage.tsx'), "import { Button } from '../../ui/Button';\nimport { Button as ButtonV2 } from './ButtonV2';\nexport function InvoicesPage() { return <div className=\"bg-surface\"><Button /><ButtonV2 /></div>; }\n");
+  // an edit to a file that already imported the copy: not this change's
+  writeFileSync(join(dir, 'src/features/invoices/InvoiceDetail.tsx'), `import { Button } from './ButtonV2';\nexport function InvoiceDetail() { return <div className="text-ink bg-surface">${uses(4)}</div>; }\n`);
+
+  const r = run(dir);
+  const twins = r.findings.filter((f) => f.kind === 'twin-token');
+  ok(twins.length === 2, `two new tokens copy an existing one (got ${twins.length}: ${twins.map((f) => f.value).join(', ')})`);
+  ok(twins.some((f) => f.value === '--color-overdue-soft' && /twin of the existing --color-warning-soft \(#fdf5e6\)/.test(f.advice)), 'the copied token names the one it copies');
+  ok(twins.some((f) => f.value === '--color-overdue-action' && /the same dark value \(#6d8bff\)/.test(f.advice)), 'a shared dark value is said');
+  ok(!twins.some((f) => f.value === '--color-overdue-title'), 'a token that copies nothing is left alone');
+  ok(!r.findings.some((f) => /negative-soft|warning-soft/.test(f.value)), 'the tokens already there are not judged');
+  const imp = r.findings.filter((f) => f.kind === 'avoided-copy');
+  ok(imp.length === 1 && imp[0].file === 'src/features/invoices/InvoicesPage.tsx' && imp[0].line === 2, `the new import of the copy is flagged on its line (got ${imp.map((f) => `${f.file}:${f.line}`).join(', ')})`);
+  ok(/The canonical one is src\/ui\/Button\.tsx/.test(imp[0]?.advice ?? ''), 'the import names the canonical copy');
+  ok(/This copy hard-codes #3d5ce0/.test(imp[0]?.advice ?? ''), 'the colour hidden in the copy is named');
+  const md = execFileSync('node', [CLI, dir, '--base', 'HEAD', '--markdown'], { encoding: 'utf8' });
+  ok(md.includes('token that copies an existing one. --color-overdue-soft'), 'the PR comment words it once, without repeating the name');
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

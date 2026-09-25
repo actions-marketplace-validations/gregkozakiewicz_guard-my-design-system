@@ -12,7 +12,8 @@ import {
   isCodeFile, isStyleFile, typefaceOf, GENERIC_FONTS,
   definedComponents, exemptReason,
   EXTRA_KINDS, extraValue, fontDeclarations,
-  WIDGET_CSS_RE, isLibraryClass, PALETTE_CLASS_RE,
+  WIDGET_CSS_RE, isLibraryClass, PALETTE_CLASS_RE, blankComments, kitPaintFindings,
+  tokenTwinFindings, avoidedImportFindings,
 } from 'roast-my-design-system/engine';
 
 // Folder membership, the way the engine's own splits do it.
@@ -86,9 +87,13 @@ function exemptFiles(added, readFile) {
  * Judge added lines against the learned system.
  * Returns [{ file, line, kind, value, advice }] sorted by file then line.
  * kinds: color | spacing | radius | fontsize | shadow | arbitrary |
- *        important | font | inline | component
+ *        important | font | inline | component | palette | kit-colour |
+ *        kit-px | twin-token | avoided-copy
+ * readFile(file) gives the file as it stands; readBase(file) the file at the
+ * base (null when the change creates it), so a token or an import the change
+ * adds can be told from one that was already there.
  */
-export function judge(added, system, { readFile } = {}) {
+export function judge(added, system, { readFile, readBase } = {}) {
   const tokenSet = new Set(system.tokens);
   // How the repo was read, from the engine's own profiles (roast 7.8):
   // installed code is not the change's sin, a registry is judged on what it
@@ -106,6 +111,20 @@ export function judge(added, system, { readFile } = {}) {
   };
   const isWidgetFile = (file) => underAny(file, prof.widgetDirs) || WIDGET_CSS_RE.test(wholeText(file) ?? '');
   const paletteRe = new RegExp(PALETTE_CLASS_RE.source, 'g');
+  // The added line with its comments blanked, the way the report and the
+  // live checks read a file before matching (roast 8.4.4): a class named in
+  // a comment paints nothing. Blanked from the whole file when it is at hand,
+  // so a block comment opened on an earlier line still counts as a comment.
+  const blanked = new Map();
+  const codeText = (file, lineNo, text) => {
+    const w = wholeText(file);
+    if (w == null) return blankComments(text);
+    if (!blanked.has(file)) blanked.set(file, blankComments(w).split('\n'));
+    // blanking keeps every character's place, so the file's line is the
+    // diff's line only if the lengths match; otherwise the file has moved on
+    const l = blanked.get(file)[lineNo - 1];
+    return l != null && l.length === text.length ? l : blankComments(text);
+  };
 
   // The system was learned from the tree that already CONTAINS these added
   // lines, so a new value would vouch for itself. A value is only "known"
@@ -171,6 +190,35 @@ export function judge(added, system, { readFile } = {}) {
     }
   }
 
+  // A product built on a kit (MUI, Mantine, Chakra UI, Ant Design), roast
+  // 8.4.6: a colour or a pixel size written onto a kit component where the
+  // theme has a value. The engine judges the whole file (the import that makes
+  // it a kit file sits at the top, where the diff never looks) and the guard
+  // keeps the hits on added lines. On a kit file the kit rule owns colours
+  // and the pixel sizes it named, so the generic rules stay quiet about the
+  // same value: one line, one finding, the same words as the roast report's
+  // live checks.
+  const kit = prof.kit ?? null;
+  const kitJudged = new Map();
+  const kitLines = (file) => {
+    if (!kit) return null;
+    if (!kitJudged.has(file)) {
+      const w = wholeText(file);
+      const j = w == null ? null : kitPaintFindings(w, kit, { file });
+      if (!j || j.exempt) kitJudged.set(file, null);
+      else {
+        const byLine = new Map();
+        for (const f of j.findings) {
+          const ln = w.slice(0, f.index).split('\n').length;
+          if (!byLine.has(ln)) byLine.set(ln, []);
+          byLine.get(ln).push(f);
+        }
+        kitJudged.set(file, byLine);
+      }
+    }
+    return kitJudged.get(file);
+  };
+
   const findings = [];
 
   for (const { file, line, text } of added) {
@@ -180,7 +228,18 @@ export function judge(added, system, { readFile } = {}) {
 
     const seen = extractStyling(text, { css });
 
+    const onKit = css ? null : kitLines(file);
+    const kitPx = new Set();
+    for (const f of onKit?.get(line) ?? []) {
+      if (f.rule === 'kit-px') kitPx.add(f.value.split(': ')[1]);
+      findings.push({
+        file, line, kind: f.rule, value: f.value, label: f.label,
+        advice: f.note ? `${f.note}. ${f.fix.replace(/\.$/, '')}` : f.fix.replace(/\.$/, ''),
+      });
+    }
+
     for (const c of seen.colors) {
+      if (onKit) break; // the kit rule owns colours on a kit file
       if (tokenSet.has(c.value)) continue; // disciplined token use
       const near = c.value.startsWith('#') ? nearestColor(c.value, system.tokens) : null;
       findings.push({
@@ -194,6 +253,7 @@ export function judge(added, system, { readFile } = {}) {
     }
 
     for (const s of seen.spacing) {
+      if (kitPx.has(s.value)) continue; // the kit rule said it
       if (knownLengths.has(s.value)) continue; // the codebase already uses it
       const near = nearestLength(s.value, [...knownLengths]);
       findings.push({
@@ -282,10 +342,10 @@ export function judge(added, system, { readFile } = {}) {
     // CSS-variable mode): paint from a tin. The same pattern the report
     // counts per 100 files; here, per added line.
     if (!css && prof.paletteReady) {
-      for (const m of text.matchAll(paletteRe)) {
+      for (const m of codeText(file, line, text).matchAll(paletteRe)) {
         findings.push({
           file, line, kind: 'palette', value: m[0],
-          advice: `a theme variable covers this; use a semantic class such as bg-primary or text-muted-foreground, or add a variable${prof.sheetFile ? ` to ${prof.sheetFile}` : ''}`,
+          advice: `a theme token covers this; use it as the class (bg-primary, text-muted-foreground), or add one${prof.sheetFile ? ` to ${prof.sheetFile}` : ' to the theme'} once`,
         });
       }
     }
@@ -305,6 +365,44 @@ export function judge(added, system, { readFile } = {}) {
           });
         }
       }
+    }
+  }
+
+  // Two checks that read the whole file against its base, roast 8.6: a new
+  // colour token that copies one the system already has, and a new import of
+  // the duplicate the canonical copy replaces. The engine words both, the
+  // same words roast_validate, roast_review and --check give; the guard keeps
+  // the hits on added lines.
+  const addedAt = new Map();
+  for (const { file, line } of added) {
+    if (!addedAt.has(file)) addedAt.set(file, new Set());
+    addedAt.get(file).add(line);
+  }
+  const baseText = (file) => {
+    if (!readBase) return undefined;
+    try { return readBase(file); } catch { return undefined; }
+  };
+  const lineAt = (text, index) => text.slice(0, index).split('\n').length;
+  for (const [file, lines] of addedAt) {
+    if (exempt(file) || outOfScope(file)) continue;
+    const css = isStyleFile(file);
+    if (!css && !isCodeFile(file)) continue;
+    const w = wholeText(file);
+    if (w == null) continue;
+    const hits = css
+      ? (system.tokenDefs && w.includes('--') ? tokenTwinFindings(w, {
+          before: baseText(file),
+          others: system.tokenDefs.filter((d) => !samePath(d.file, file)),
+          tailwind: prof.kind === 'tailwind' || /@theme\b/.test(w),
+        }) : [])
+      : (system.duplicates ? avoidedImportFindings(w, { file, before: baseText(file), dupes: system.duplicates }) : []);
+    for (const f of hits) {
+      const line = lineAt(w, f.index);
+      if (!lines.has(line)) continue;
+      findings.push({
+        file, line, kind: f.rule, value: f.name,
+        advice: `${f.message} ${f.fix.replace(/\.$/, '')}`,
+      });
     }
   }
 

@@ -56,11 +56,32 @@ it updates that same comment. It never adds more comments:
   are decided elsewhere, so they are left alone.
 - **A second definition of a component you already have.** The finding names
   the file that already defines it, and how many places use that one.
+- **A new import of a duplicate component.** When a name is defined in more
+  than one file and one copy is clearly the main one, importing another copy
+  is flagged. The finding names the main copy, how often each is used, and
+  the colours the other copy hard-codes. If two copies are used about
+  equally, nothing is flagged.
+- **A new colour token that copies an existing one.** A token added to a
+  stylesheet whose value is almost the same as a token the system already
+  has, or whose dark value is exactly the same, is flagged with the existing
+  token named: `--color-overdue-soft (#fff4e5) is a twin of the existing
+  --color-warning-soft (#fdf5e6)`. Numbered steps such as `gray-100` and
+  shadcn's own theme variables are never compared.
 - **A palette colour where a theme variable exists.** On a shadcn repo whose
   theme file holds the variables, `text-slate-500` in the app's own code is
   flagged and the theme file named. Off on utility-class installs.
+- **A colour or a pixel size written onto a kit component.** On a product
+  built on MUI, Mantine, Chakra UI or Ant Design, `color: '#667085'` in an
+  `sx` prop or a style object is flagged and the finding says whether the
+  theme already holds that colour, or tells you to add it there once. A
+  pixel size such as `p: '12px'` is turned into the theme's spacing step. The
+  advice is in the kit's own words: `sx` paths on MUI, props on Mantine,
+  style props on Chakra, the theme config on Ant Design.
 
-It reads the repo the way the roast report does. On a shadcn repo the
+It reads the repo the way the roast report does. On a kit repo the theme's
+colours are the token set, and a colour the theme already holds is flagged
+on a kit component all the same: writing it by hand is the exact mistake the
+check exists for. On a shadcn repo the
 installed catalogue, installed registries and kit blocks are not judged:
 `shadcn add` is not a sin. On a repo that publishes a shadcn registry only
 the published folders are judged. `!important` in an embedded widget's

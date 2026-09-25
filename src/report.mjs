@@ -16,10 +16,17 @@ const KIND_LABEL = {
   inline: 'inline style block',
   component: 'second definition of',
   palette: 'palette colour where a theme variable exists',
+  // on a kit repo the engine words the label with the kit's name (f.label)
+  'kit-colour': 'colour written onto a kit component',
+  'kit-px': 'pixel size on a kit component',
+  // the engine's sentence names the token or the import itself (roast 8.6)
+  'twin-token': 'token that copies an existing one',
+  'avoided-copy': 'import of a duplicate',
 };
+const labelOf = (f) => f.label ?? KIND_LABEL[f.kind];
 
 // Kinds whose label already says everything; printing the value repeats it.
-const VALUELESS = new Set(['important', 'inline']);
+const VALUELESS = new Set(['important', 'inline', 'twin-token', 'avoided-copy']);
 
 const FOOTER = 'Full picture of the whole codebase: `npx roast-my-design-system`';
 
@@ -29,7 +36,7 @@ export function terminalReport(findings) {
   }
   const lines = [`guard-my-design-system: ${findings.length} new issue${findings.length === 1 ? '' : 's'} in this change\n`];
   for (const f of findings) {
-    lines.push(`  ${f.file}:${f.line} · ${KIND_LABEL[f.kind]} ${VALUELESS.has(f.kind) ? '' : f.value}`.trimEnd() + `. ${capitalise(f.advice)}.`);
+    lines.push(`  ${f.file}:${f.line} · ${labelOf(f)} ${VALUELESS.has(f.kind) ? '' : f.value}`.trimEnd() + `. ${capitalise(f.advice)}.`);
   }
   lines.push('');
   lines.push('  Only lines added in this change were counted. The existing codebase was not judged.');
@@ -49,7 +56,7 @@ export function markdownReport(findings) {
   }
   const out = [`**🛡 guard-my-design-system: ${findings.length} new issue${findings.length === 1 ? '' : 's'} in this pull request**`, ''];
   for (const f of findings) {
-    out.push(`- \`${f.file}:${f.line}\` · ${KIND_LABEL[f.kind]} ${VALUELESS.has(f.kind) ? '' : `\`${f.value}\``}`.trimEnd() + `. ${capitalise(f.advice)}.`);
+    out.push(`- \`${f.file}:${f.line}\` · ${labelOf(f)} ${VALUELESS.has(f.kind) ? '' : `\`${f.value}\``}`.trimEnd() + `. ${capitalise(f.advice)}.`);
   }
   out.push('');
   out.push(`<sub>Only added lines are checked; the existing codebase is never judged. ${FOOTER}</sub>`);
