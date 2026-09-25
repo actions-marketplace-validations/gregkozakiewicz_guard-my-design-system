@@ -13,7 +13,7 @@ import {
   definedComponents, exemptReason,
   EXTRA_KINDS, extraValue, fontDeclarations,
   WIDGET_CSS_RE, isLibraryClass, PALETTE_CLASS_RE, blankComments, kitPaintFindings,
-  tokenTwinFindings, avoidedImportFindings,
+  tokenTwinFindings, avoidedImportFindings, isChartFile, chartFindings,
 } from 'roast-my-design-system/engine';
 
 // Folder membership, the way the engine's own splits do it.
@@ -88,7 +88,7 @@ function exemptFiles(added, readFile) {
  * Returns [{ file, line, kind, value, advice }] sorted by file then line.
  * kinds: color | spacing | radius | fontsize | shadow | arbitrary |
  *        important | font | inline | component | palette | kit-colour |
- *        kit-px | twin-token | avoided-copy
+ *        kit-px | twin-token | avoided-copy | chart-colour | chart-palette
  * readFile(file) gives the file as it stands; readBase(file) the file at the
  * base (null when the change creates it), so a token or an import the change
  * adds can be told from one that was already there.
@@ -221,6 +221,18 @@ export function judge(added, system, { readFile, readBase } = {}) {
 
   const findings = [];
 
+  // A chart's series colours are judged against the chart palette, or its
+  // absence, by the engine (roast 8.8.0, lib/charts): the report never
+  // counted them, the live checks counted every one, and the guard did too.
+  // On a chart file the chart rule owns colours, the same way it does in
+  // roast_validate: the kit judge and the generic colour rule stay out.
+  const chartColours = new Map(); // file → [{ value, index: line }]
+  const isChart = (file) => {
+    if (!system.charts) return false;
+    const w = wholeText(file);
+    return isChartFile(file, w ?? '');
+  };
+
   for (const { file, line, text } of added) {
     if (exempt(file) || outOfScope(file)) continue;
     const css = isStyleFile(file);
@@ -228,7 +240,14 @@ export function judge(added, system, { readFile, readBase } = {}) {
 
     const seen = extractStyling(text, { css });
 
-    const onKit = css ? null : kitLines(file);
+    const chart = !css && isChart(file);
+    if (chart) {
+      const list = chartColours.get(file) ?? [];
+      for (const c of seen.colors) if (!tokenSet.has(c.value)) list.push({ value: c.value, index: line });
+      chartColours.set(file, list);
+    }
+
+    const onKit = css || chart ? null : kitLines(file);
     const kitPx = new Set();
     for (const f of onKit?.get(line) ?? []) {
       if (f.rule === 'kit-px') kitPx.add(f.value.split(': ')[1]);
@@ -239,7 +258,7 @@ export function judge(added, system, { readFile, readBase } = {}) {
     }
 
     for (const c of seen.colors) {
-      if (onKit) break; // the kit rule owns colours on a kit file
+      if (onKit || chart) break; // the kit rule or the chart rule owns colours here
       if (tokenSet.has(c.value)) continue; // disciplined token use
       const near = c.value.startsWith('#') ? nearestColor(c.value, system.tokens) : null;
       findings.push({
@@ -401,6 +420,21 @@ export function judge(added, system, { readFile, readBase } = {}) {
       if (!lines.has(line)) continue;
       findings.push({
         file, line, kind: f.rule, value: f.name,
+        advice: `${f.message} ${f.fix.replace(/\.$/, '')}`,
+      });
+    }
+  }
+
+  // The chart rule, once per chart file, in the engine's words: with a
+  // palette every hand-written colour is a finding that names it; without
+  // one the file gets a single line that names the precedent chart and asks
+  // for the palette once (roast 8.8.0). `index` carries the diff line.
+  for (const [file, colours] of chartColours) {
+    if (!colours.length) continue;
+    for (const f of chartFindings({ file, colours, charts: system.charts, tokenFile: system.tokenFile ?? null })) {
+      findings.push({
+        file, line: f.index, kind: f.rule,
+        value: f.rule === 'chart-colour' ? f.message.match(/Chart colour (\S+)/)?.[1] ?? 'colour' : `${colours.length} series colour${colours.length === 1 ? '' : 's'} by hand`,
         advice: `${f.message} ${f.fix.replace(/\.$/, '')}`,
       });
     }

@@ -22,11 +22,15 @@ const KIND_LABEL = {
   // the engine's sentence names the token or the import itself (roast 8.6)
   'twin-token': 'token that copies an existing one',
   'avoided-copy': 'import of a duplicate',
+  // the chart rule (roast 8.8): a colour beside a chart palette, or a chart
+  // painting by hand where the repo keeps none
+  'chart-colour': 'chart colour written by hand',
+  'chart-palette': 'chart painted by hand',
 };
 const labelOf = (f) => f.label ?? KIND_LABEL[f.kind];
 
 // Kinds whose label already says everything; printing the value repeats it.
-const VALUELESS = new Set(['important', 'inline', 'twin-token', 'avoided-copy']);
+const VALUELESS = new Set(['important', 'inline', 'twin-token', 'avoided-copy', 'chart-palette']);
 
 const FOOTER = 'Full picture of the whole codebase: `npx roast-my-design-system`';
 

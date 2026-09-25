@@ -1,6 +1,6 @@
 # guard-my-design-system
 
-[![npm](https://img.shields.io/npm/v/guard-my-design-system?color=2dd4bf&label=npm)](https://www.npmjs.com/package/guard-my-design-system) [![downloads](https://img.shields.io/npm/dm/guard-my-design-system?color=2dd4bf&label=downloads)](https://www.npmjs.com/package/guard-my-design-system) [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE) [![no telemetry](https://img.shields.io/badge/no-telemetry-2dd4bf)](https://github.com/gregkozakiewicz/guard-my-design-system#what-makes-the-verdict-trustworthy) [![GitHub Action](https://img.shields.io/badge/GitHub_Action-v1-2dd4bf)](#on-a-pull-request)
+[![npm](https://img.shields.io/npm/v/guard-my-design-system?color=2dd4bf&label=npm)](https://www.npmjs.com/package/guard-my-design-system) [![downloads](https://img.shields.io/npm/dm/guard-my-design-system?color=2dd4bf&label=downloads)](https://www.npmjs.com/package/guard-my-design-system) [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE) [![no telemetry](https://img.shields.io/badge/no-telemetry-2dd4bf)](https://github.com/gregkozakiewicz/guard-my-design-system#what-makes-the-verdict-trustworthy) [![GitHub Action](https://img.shields.io/badge/GitHub_Action-v2-2dd4bf)](#on-a-pull-request)
 
 ## Your design system dies one pull request at a time. This makes sure it doesn't.
 
@@ -70,6 +70,17 @@ it updates that same comment. It never adds more comments:
 - **A palette colour where a theme variable exists.** On a shadcn repo whose
   theme file holds the variables, `text-slate-500` in the app's own code is
   flagged and the theme file named. Off on utility-class installs.
+- **A chart colour written by hand.** A chart needs several colours that
+  differ from each other, and most design systems never name them, so the
+  chart rule (roast 8.8) has three answers. Where the repo keeps a chart
+  palette (`--chart-*` or `--series-*` tokens, a `chartColors` entry in the
+  theme, or shadcn's `--chart-1` to `--chart-5` when a chart actually reads
+  them), a hex in a chart file is flagged and the palette named. Where the
+  repo has charts but no palette, a new chart painting by hand gets one line
+  that names the existing chart doing the same and asks for the palette
+  once. The first chart in a repo gets one line asking for a name. The
+  generic colour rule stays out of chart files, the same way it does in
+  `roast_validate`.
 - **A colour or a pixel size written onto a kit component.** On a product
   built on MUI, Mantine, Chakra UI or Ant Design, `color: '#667085'` in an
   `sx` prop or a style object is flagged and the finding says whether the
@@ -134,7 +145,7 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-      - uses: gregkozakiewicz/guard-my-design-system@v1
+      - uses: gregkozakiewicz/guard-my-design-system@v2
 ```
 
 After that it runs on every pull request and needs no attention from you.
@@ -143,7 +154,7 @@ If you want the check to fail instead of commenting, turn on strict mode.
 It is the only setting:
 
 ```yaml
-      - uses: gregkozakiewicz/guard-my-design-system@v1
+      - uses: gregkozakiewicz/guard-my-design-system@v2
         with:
           strict: true
 ```

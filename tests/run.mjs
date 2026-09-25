@@ -577,5 +577,46 @@ console.log('roast 8.6: twin tokens and imports of the copy to avoid:');
   ok(md.includes('token that copies an existing one. --color-overdue-soft'), 'the PR comment words it once, without repeating the name');
 }
 
+// ---- charts (roast 8.8.0 / guard 2.0.0): the chart rule owns colours in a chart file ----
+console.log('charts:');
+{
+  const chart = (colours, name = 'Donut') =>
+    `import { PieChart, Pie } from 'recharts';\nconst C = [${colours.map((c) => `'${c}'`).join(', ')}];\nexport const ${name} = () => <PieChart><Pie fill={C[0]} /></PieChart>;\n`;
+  // the first chart in a repo with no palette: one warning, no colour findings
+  const dir = makeRepo();
+  writeFileSync(join(dir, 'components/Donut.tsx'), chart(['#7c3aed', '#db2777', '#0891b2']));
+  const r = run(dir);
+  const kinds = r.findings.map((f) => f.kind).sort().join(',');
+  ok(kinds === 'chart-palette', `first chart: one chart-palette warning, no colour findings (${kinds})`);
+  // the scan already holds the new file, so the engine reads it as a chart
+  // beside no palette rather than the first chart; the advice is the same
+  ok(/no chart palette|First chart in this repo/.test(r.findings[0]?.advice ?? '') && /styles\/site\.css|the theme/.test(r.findings[0]?.advice ?? ''), 'the warning says the repo has no palette and where it belongs');
+  ok(r.findings[0]?.line === 2, `the warning sits on the line of the first colour (line ${r.findings[0]?.line})`);
+  // a second chart beside a hand-painted one: the precedent is named, once
+  git(dir, 'add', '-A'); git(dir, 'commit', '-qm', 'first chart');
+  writeFileSync(join(dir, 'components/Bars.tsx'), chart(['#16a34a', '#f59e0b'], 'Bars'));
+  const r2 = run(dir);
+  ok(r2.findings.length === 1 && r2.findings[0].kind === 'chart-palette', `second chart: one warning (${r2.findings.map((f) => f.kind).join(',')})`);
+  ok(r2.findings[0]?.advice.includes('components/Donut.tsx already does the same with 3'), `the warning names the precedent (${r2.findings[0]?.advice.slice(0, 120)})`);
+  rmSync(dir, { recursive: true, force: true });
+
+  // a repo that keeps a chart palette: every hand-written chart colour names it
+  const dir2 = makeRepo();
+  // the repo's own names: shadcn's stock --chart-1..5 count as a palette
+  // only when a chart reads them (roast 8.8.0), so they are not used here
+  appendFileSync(join(dir2, 'styles/site.css'), '--chart-primary: #2563eb;\n--chart-secondary: #16a34a;\n');
+  git(dir2, 'add', '-A'); git(dir2, 'commit', '-qm', 'palette');
+  writeFileSync(join(dir2, 'components/Donut.tsx'), chart(['#7c3aed', '#db2777']));
+  const r3 = run(dir2);
+  const k3 = r3.findings.map((f) => f.kind).sort().join(',');
+  ok(k3 === 'chart-colour,chart-colour', `with a palette: one chart-colour finding per colour (${k3})`);
+  ok(r3.findings.every((f) => f.advice.includes('--chart-primary')), 'each finding names the palette');
+  ok(r3.findings.every((f) => f.kind !== 'color'), 'the generic colour rule stays out of a chart file');
+  // a chart that reads the palette is clean
+  writeFileSync(join(dir2, 'components/Donut.tsx'), "import { Bar } from 'recharts';\nexport const Donut = () => <Bar fill=\"var(--chart-primary)\" />;\n");
+  ok(run(dir2).findings.length === 0, 'a chart that reads the palette is clean');
+  rmSync(dir2, { recursive: true, force: true });
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
